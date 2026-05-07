@@ -1,0 +1,201 @@
+~not_save_exec;
+# versao 2.2
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 20/02/2017 | Lucas       | Caio        |   10174     | Aceitar parâmetros em branco quando inserido.
+# | 21/02/2017 | Lucas       |             |             | Adicionado flowdata.
+# | 26/04/2017 | Lucas       |             |             | Corrigido coluna node
+# | 23/05/2018 | Giovani     |             |             | Alterado ID de edges da classe alert.
+
+
+connect $v{ds_bridge};
+
+if "$v{_action#}".equals("list") ;
+	set where = "WHERE 1 = 1" + ("$v{search[0][field]#}".equals("") ? "" : " AND TRIM(UPPER($v{search[0][field]})) LIKE TRIM(UPPER('%$v{search[0][value]}%')) ");
+	set sort = "ORDER BY $v{sort[0][field]#descricao} $v{sort[0][direction]#}";
+	set limit = "LIMIT $v{limit#all} OFFSET $v{offset#all}";
+
+	sql
+	Select
+		ar.idwfatividaderealizada recid,
+		ar.idwfatividaderealizada,
+		ar.idwfatividade,
+		ar.dataalteracao,
+		ar.tiposituacao,
+		ar.idwfatividadeproxima,
+		ar.idusuarioalteracao,
+		ar.descricao,
+		a.idwfatividade,
+		a.descricao wfatividade,
+		pa.idwfatividade idwfatividadeproxima,
+		pa.descricao wfatividadeproxima,
+		p.descricao wfprocesso,
+		c.idwfcausa,
+		c.descricao wfcausa,
+		i.idwfimpacto,
+		i.descricao wfimpacto,
+		ae.idareaempresa,
+		ae.descricao areaempresa
+	From
+		wfatividaderealizada ar     
+		left join wfatividade a on a.idwfatividade = ar.idwfatividade
+		left join wfprocesso p on p.idwfprocesso = a.idwfprocesso
+		left join wfatividade pa on pa.idwfatividade = ar.idwfatividadeproxima  
+		left join wfcausa c on c.idwfcausa = ar.idwfcausa
+		left join wfimpacto i on i.idwfimpacto = ar.idwfimpacto
+		left join areaempresa ae on ae.idareaempresa = ar.idareaempresa
+	Where 
+		ar.idwfprocesso = $v{idwfprocesso}
+	sql_var(sql_base) no_exec ;
+
+	sql Select * From ($v{sql_base}) x $v{where} $v{sort} $v{limit} sql_var(sql);
+	sql select count(*) as total from ($v{sql_base}) x $v{where};
+end_if ;
+
+if "$v{_action#}".equals("flowdata") ;
+	sql select
+	        json_build_object(
+	        	'data', json_build_object(
+	        		'id', pe.idwfprocessoevento,
+		        	'description', pe.descricao,
+		        	'shape', 'rectangle'
+	        	), 
+	        	'classes', ''
+	        )::text root
+		from
+			wfprocessoevento pe
+		where
+			pe.idwfprocesso = $v{idwfprocesso};
+
+	sql select
+			array_to_json(array_agg(node))::text nodes
+		from (
+			select
+		        json_build_object(
+		        	'data', json_build_object(
+		        		'id', pe.idwfprocessoevento, 
+		        		'content', pe.descricao,
+		        		'shape', 'rectangle',
+		        		'background', 'green'
+		        	),
+		        	'classes', ''
+		        ) node
+			from
+				wfprocessoevento pe
+			where
+				pe.idwfprocesso = $v{idwfprocesso}
+			union all
+			select 	
+				json_build_object(
+					'data', json_build_object(
+						'id', 'A@'||a.idwfatividade,
+						'content', a.descricao,
+		        		'shape', 'ellipse',
+		        		'background', 'gray'
+					),
+					'classes', ''
+				) node
+			from 
+				wfatividade a
+			where 
+				a.idwfprocesso = $v{idwfprocesso}
+			union all
+			select 	
+				json_build_object(
+					'data', json_build_object(
+						'id', 'F', 
+						'content', 'Finaliza',
+		        		'shape', 'octagon',
+		        		'background', 'blue'
+					)
+				) node
+			
+		) x;
+
+	sql select
+			array_to_json(array_agg(edge))::text edges
+		from (
+			select
+				json_build_object(
+					'data', json_build_object(
+						'id', 'E!'||pe.idwfprocessoevento, 
+						'source', pe.idwfprocessoevento, 
+						'target', 'A@'||pe.idwfatividadeinicial,
+						'label', 'Atividade Inicial'
+					), 
+					'classes', ''
+				) edge
+			from
+				wfprocessoevento pe
+			where
+				pe.idwfprocesso = $v{idwfprocesso}
+			union all
+			select
+				json_build_object(
+					'data', json_build_object(
+						'id', 'AR@'||are.idwfatividaderealizada||'A@'||are.idwfatividade,
+						'source', 'A@'||a.idwfatividade,
+						'target', coalesce('A@'||are.idwfatividadeproxima, 'F'),
+						'label', are.descricao
+					), 
+					'classes', 'alert'
+				) edge
+			from 
+				wfatividade a
+				inner join wfatividaderealizada are on are.idwfatividaderealizada = a.idwfatividaderealizadaexpiracao
+			where 
+				a.idwfprocesso = $v{idwfprocesso}
+			union all
+			select
+				json_build_object(
+					'data', json_build_object(
+						'id', 'AR@'||are.idwfatividaderealizada, 
+						'source', 'A@'||are.idwfatividade, 
+						'target', coalesce('A@'||are.idwfatividadeproxima, 'F'),
+						'label', are.descricao
+					),
+					'classes', ''
+				) edge
+			from 
+				wfatividaderealizada are
+			where 
+				are.idwfprocesso = $v{idwfprocesso}	
+				and are.idwfatividade is not null
+		) x;		
+
+end_if ;
+
+if "$v{_action#}".equals("insert") && "$v{_id#}".equals("") ;
+	sql select nextval('seq_idWFAtividadeRealizada') as id;
+	set _id = $c{id};
+end_if ;
+
+if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
+	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
+	set msg1 = "Atividade gravada com sucesso.";
+	set msg2 = "Erro ao gravar Atividade.";
+	set response = new bdo.util.SQLUtilX('wfatividaderealizada', 'descricao, idwfprocesso, idwfatividade, idwfatividadeproxima, tiposituacao, idareaempresa, idwfcausa, idwfimpacto, dataalteracao, idusuarioalteracao', 'idwfatividaderealizada')
+								   	.setConnectionX(execScript.getConnection())
+								   	.setString('$v{descricao}')
+								   	.setInt('$v{idwfprocesso}')
+								   	.setInt('$v{idwfatividade}')
+								   	.setInt('$v{idwfatividadeproxima#}')
+								   	.setString('$v{tiposituacao#S}')
+								   	.setInt('$v{idareaempresa#}')
+								   	.setInt('$v{idwfcausa#}')
+								   	.setInt('$v{idwfimpacto#}')
+									.setDate('$v{dataAtual}')
+									.setInt($v{idUsuario})
+								   	.setIntPK($v{_id})
+								   	.insertOrUpdate('$v{msg1}', '$v{msg2}');
+end_if ;
+
+if "$v{_action#}".equals("delete") ;
+	set msg1 = "Atividade $v{_id} excluída com sucesso.";
+	set msg2 = "Erro ao excluir Atividade $v{_id}.";
+	set response = new bdo.util.SQLUtilX('wfatividaderealizada', '', 'idwfatividaderealizada')
+							   .setConnectionX(execScript.getConnection())
+							   .setIntPK($v{_id})
+							   .delete('$v{msg1}', '$v{msg2}');
+end_if ;

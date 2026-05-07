@@ -1,0 +1,58 @@
+# versao 1.6
+#
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 19/10/2017 | Elcio        | 	        |             | Ordenado processos por descricao.
+# | 23/08/2017 | Sarah        | 	        |             | Corrigido type para integer
+# | 24/08/2021 | Giovani      | Edinaldo    | 24613       | Adicionado coluna "comentariosapenasatividade"
+# | 12/02/2025 | Bruno        | Atendimento | 38161		  | no JS do HTML foi adicinado botão e funções de ATIVAR/INATIVAR eventos. Documentação detalhada no MANTIS 38161.
+
+set _iframe = true;
+
+connect $v{ds_bridge};
+
+sql 
+Select 
+	idwfprocesso as idwfprocesso
+	,descricao as descricao 
+From 
+	wfprocesso 
+Order by 
+	descricao 
+sql_var(sql_idwfprocesso)
+;
+
+parameter idwfprocesso label="Processo" type="integer" values="sql_var(sql_idwfprocesso)";
+
+sql 
+select 
+	idwfprocesso
+	,descricao descridwfprocesso 
+From 
+	wfprocesso 
+Where 
+	idwfprocesso = $v{idwfprocesso} sql_var(sql_idwfprocesso)
+	;
+	
+sql 
+Select 
+	idwfatividade idwfatividadeinicial
+	,descricao descridwfatividadeinicial 
+From 
+	wfatividade 
+Where 
+	idwfprocesso = $v{idwfprocesso} sql_var(sql_idwfatividadeinicial)
+	;
+	
+sql 
+Select 
+	idwfatividaderealizada idwfatividadeexpiracao
+	,descricao descridwfatividadeexpiracao 
+From 
+	wfatividaderealizada 
+Where 
+	idwfprocesso = $v{idwfprocesso} sql_var(sql_idwfatividaderealizadaexpiracao)
+	;
+
+connect $v{datasource2};
+sql select idtarefa as idtarefacrud from tarefa where apelido = '$v{apelido}-crud';

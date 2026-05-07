@@ -1,0 +1,36 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+# Parâmetros
+# {0} - Apelido tarefa atribuição da nova fila de trabalho
+
+run_script_java_groovy HEAVEN-wf-gera-wffilatrabalho-sequencia-include;
+
+<script_java_groovy name="HEAVEN-wf-gera-wffilatrabalho-sequencia-include">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+
+	// # Atribui causa impacto e area empresa a fila de trabalho
+	ExecScript execScriptChild1 = new ExecTarefa('HEAVEN-wfg-atribui-wfcausa-wfimpacto-areaempresa-wffilatrabalho', execScript).getExecScriptChild();
+	execScriptChild1.addVar('WFFilaTrabalho_idTarefaExecAtvRealizada', execScript.getValueVar('execId'));
+	execScriptChild1.addVar('WFFilaTrabalho_idWFFilatrabalho', execScript.getValueVar('idWFFilatrabalho#'));
+	execScriptChild1.addVar('WFFilaTrabalho_idWFOcorrencia', execScript.getValueVar('idWFOcorrencia#'));
+	execScriptChild1.run();
+
+	// # Tarefa que gera a próxima fila de trabalho
+	ExecScript execScriptChild2 = new ExecTarefa('HEAVEN-wfg-gera-wffilatrabalho-sequencia', execScript).getExecScriptChild();
+	execScriptChild2.addVar('WFFilaTrabalho_idTarefaExecAtvRealizada', execScript.getValueVar('execId'));
+	execScriptChild2.addVar('WFFilaTrabalho_idWFFilatrabalho', execScript.getValueVar('idWFFilatrabalho#'));
+	execScriptChild2.addVar('WFFilaTrabalho_idWFOcorrencia', execScript.getValueVar('idWFOcorrencia#'));
+	execScriptChild2.run();
+
+	// # Tarefa de atribui a nova fila de trabalho a alguém
+	ExecScript execScriptChild3 = new ExecTarefa({0}, execScript).getExecScriptChild();
+	execScriptChild1.addVar('WFFilaTrabalho_idTarefaExecAtvRealizada', execScript.getValueVar('execId'));
+	execScriptChild3.addVar('WFFilaTrabalho_idWFFilatrabalho', execScript.getValueVar('idWFFilatrabalho#'));
+	execScriptChild3.addVar('WFFilaTrabalho_idWFOcorrencia', execScript.getValueVar('idWFOcorrencia#'));
+	execScriptChild3.run();
+</script_java_groovy>

@@ -1,0 +1,22 @@
+# versao 1.7
+set _iframe = true;
+
+connect $v{ds_bridge};
+
+#sql select idwfprocesso, descricao from wfprocesso where situacao = 'A' order by 2 sql_var(sql_wfprocesso);
+
+
+$include{HEAVEN-script-sql-busca-wfprocesso}include
+
+
+parameter idwfprocesso label="Processo" type="integer" values="sql_var(sqlwfprocesso)";
+
+sql select 'F' tiposituacao, 'Finalizado' descrtiposituacao union select 'S', 'Sequencia' sql_var(sql_tiposituacao);
+sql select idwfatividade||'' idwfatividade, descricao from wfatividade where idwfprocesso = $v{idwfprocesso}  Union Select '', '' order by 2 sql_var(sql_wfatividade);
+sql select idwfatividade||'' idwfatividadeproxima, descricao from wfatividade where idwfprocesso = $v{idwfprocesso} Union Select '', ''  order by 2 sql_var(sql_wfatividadeproxima);
+sql select idwfcausa||'' idwfcausa, descricao from wfcausa where situacao = 'A'  Union Select '', '' order by 2 sql_var(sql_wfcausa);
+sql select idwfimpacto||'' idwfimpacto, descricao from wfimpacto where situacao = 'A'  Union Select '', '' order by 2 sql_var(sql_wfimpacto);
+sql select idareaempresa||'' idareaempresa, descricao from areaempresa  Union Select '', '' order by 2 sql_var(sql_areaempresa);
+
+connect $v{datasource2};
+sql select idtarefa as idtarefacrud from tarefa where apelido = '$v{apelido}-crud';

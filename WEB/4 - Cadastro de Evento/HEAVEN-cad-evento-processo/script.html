@@ -1,0 +1,323 @@
+$> msgBuilder.setHtmlTemplates('w2ui01.html', 'w2ui01-odw2.html');
+$> msgBuilder.setContentSections('head', 'body');
+$> msgBuilder.setReplaceVarsOnTemplate(true);
+
+	<style type="text/css">
+		.container1 {
+			width: 900px;
+		}
+
+		.input-label{
+			text-align: right;
+			font-weight: bold;
+		}
+
+		select, input {
+			width: 100%;
+		}
+
+	</style>
+
+	<script type="text/javascript">
+		$(document).ready(function() {
+			setOdwW2UIGridOptions({	idTarefaCRUD: ~~~, -> $c{IDTAREFACRUD};
+								    idInput: "#idwfprocessoevento", firstFocusInput: "#descricao",
+									msgDelete: "Confirma a exclusão do Evento {id} ?",
+									w2uiFolder: "w2ui-1.4.2" });
+			configOdwForm();
+
+			$("#w2uiGrid").w2grid({ 
+				name: "w2uiGrid", 
+				url: "odwctrl?action=execTarefa&idTarefa=~~~&ajax=true&idwfprocesso=~~~", -> $c{IDTAREFACRUD}; $v{idwfprocesso};
+				postData: {_action: "list"},
+				header: "Evento de Processo - ~~~", -> $c{descridwfprocesso};
+			    show: { header: true, toolbar: true, footer: true },
+				multiSearch: false,
+				reorderColumns: true,
+				searches: [
+			        { field: "descricao", caption: "Descrição", type: "text" }
+			    ],
+			    sortData: [
+					{ field: "idwfprocessoevento", direction: "ASC" }
+				],
+				columns: [
+					{ field: "idwfprocessoevento", caption: "Cód.", size: "5%", sortable: true, searchable: false, hidden: true },
+					{ field: "descricao", caption: "Descrição", size: "30%", sortable: true, searchable: true },
+					{ field: "wfatividadeinicial", caption: "Atividade Inicial", size: "25%", sortable: true, searchable: true },
+					{ field: "wfprocesso", caption: "Processo", size: "25%", sortable: true, searchable: false },
+					{ field: "tempoexpiracao", caption: "Tempo Expiração", size: "10%", sortable: true, searchable: false },
+					{ field: "tipotempoexpiracao", caption: "Tipo Tempo", size: "10%", sortable: true, searchable: false },
+					{ field: "comentariosapenasatividade", caption: "Comentário Apenas na Atv.?", size: "10%", sortable: true, searchable: false },
+					{ field: "situacao", caption: "Sit.", size: "6%", sortable: true, searchable: false },
+
+				],
+				onClick: function(event) {
+					var record = this.get(event.recid);
+					displayData(record);
+				},
+
+				  // >>> COLOCA AQUI <<<
+				  onSelect: function(event) {
+				    event.onComplete = function() { refreshEventToolbar(); };
+				  },
+				  onUnselect: function(event) {
+				    event.onComplete = function() { refreshEventToolbar(); };
+				  },
+				  onLoad: function(event) {
+				    event.onComplete = function() { refreshEventToolbar(); };
+				  },
+
+				
+				onToolbar: function(event) {
+				  var id = event.target;
+				  if (id == "btnAdd") {
+				    actionInsert();
+				  } else if (id == "btnCopy") {
+				    actionCopy();
+				  } else if (id == "btnInativar") {
+				    actionInativar();
+				  } else if (id == "btnAtivar") {
+				    actionAtivar();
+				  } else if (id == "btnDelete") {
+				    actionDelete(w2ui.w2uiGrid.getSelection());
+				  }
+				}
+			});
+			w2ui.w2uiGrid.toolbar.add([
+			  { type: "button", id: "btnAdd", caption: "Incluir", img: "w2ui-icon-plus" },
+			  { type: "button", id: "btnCopy", caption: "Copiar", img: "w2ui-icon-plus" },
+			  { type: "button", id: "btnInativar", caption: "Inativar", img: "w2ui-icon-cross" },
+			  { type: "button", id: "btnAtivar", caption: "Ativar", img: "w2ui-icon-check" },
+			  { type: "button", id: "btnDelete", caption: "Excluir", img: "w2ui-icon-cross" }
+			]);
+			
+			function ajaxToggleEvento(action, recid) {
+			  $.ajax({
+			    url: w2ui.w2uiGrid.url,
+			    type: "POST",
+			    dataType: "text", // <<< evita parsererror
+			    data: {
+			      _action: action,          // "ativar" | "inativar"
+			      _id: recid,
+			      idwfprocesso: $("#idwfprocesso").val()
+			    },
+			    success: function(resp) {
+			      w2ui.w2uiGrid.reload(function() {
+			        clearData();
+			        refreshEventToolbar();
+			      });
+			    },
+			    error: function(xhr, status) {
+			      // Se o backend executou e voltou 200 mas o jQuery "pirou", trata como ok
+			      if (xhr && xhr.status == 200) {
+			        w2ui.w2uiGrid.reload(function() {
+			          clearData();
+			          refreshEventToolbar();
+			        });
+			        return;
+			      }
+			      alert("Erro ao " + action + " o Evento. (" + status + " / HTTP " + (xhr ? xhr.status : "?") + ")");
+			    }
+			  });
+			}
+
+
+			
+			refreshEventToolbar = function() {
+			  var sel = w2ui.w2uiGrid.getSelection();
+			  var canInativar = false;
+			  var canAtivar = false;
+			
+			  if (sel && sel.length == 1) {
+			    var recid = sel[0];
+			    var record = w2ui.w2uiGrid.get(recid);
+			    var sit = (record && record.situacao) ? ("" + record.situacao).toUpperCase() : "A";
+			
+			    canInativar = (sit == "A");
+			    canAtivar = (sit == "I");
+			  }
+			
+			  // se não existir algum botão por algum motivo, evita erro
+			  try { w2ui.w2uiGrid.toolbar.set("btnInativar", { disabled: !canInativar }); } catch(e){}
+			  try { w2ui.w2uiGrid.toolbar.set("btnAtivar", { disabled: !canAtivar }); } catch(e){}
+			};
+
+			
+			actionInativar = function() {
+			  var sel = w2ui.w2uiGrid.getSelection();
+			  if (!sel || sel.length == 0) { alert("Selecione um evento para inativar."); return; }
+			
+			  var recid = sel[0];
+			  var record = w2ui.w2uiGrid.get(recid);
+			  var desc = (record && record.descricao) ? record.descricao : recid;
+			
+			  if (!confirm("Confirma INATIVAR o Evento: " + desc + " ?")) return;
+			
+			  ajaxToggleEvento("inativar", recid);
+			};
+			
+			actionAtivar = function() {
+			  var sel = w2ui.w2uiGrid.getSelection();
+			  if (!sel || sel.length == 0) { alert("Selecione um evento para ativar."); return; }
+			
+			  var recid = sel[0];
+			  var record = w2ui.w2uiGrid.get(recid);
+			  var desc = (record && record.descricao) ? record.descricao : recid;
+			
+			  if (!confirm("Confirma ATIVAR o Evento: " + desc + " ?")) return;
+			
+			  ajaxToggleEvento("ativar", recid);
+			};
+
+			actionAtivar = function() {
+			  var sel = w2ui.w2uiGrid.getSelection();
+			  if (!sel || sel.length == 0) {
+			    alert("Selecione um evento para ativar.");
+			    return;
+			  }
+			
+			  var recid = sel[0];
+			  var record = w2ui.w2uiGrid.get(recid);
+			  var desc = (record && record.descricao) ? record.descricao : recid;
+			
+			  // só ativa se estiver inativado
+			  var sit = (record && record.situacao) ? ("" + record.situacao).toUpperCase() : "A";
+			  if (sit != "I") {
+			    alert("O evento selecionado já está ativo.");
+			    refreshEventToolbar();
+			    return;
+			  }
+			
+			  if (!confirm("Confirma ATIVAR o Evento: " + desc + " ?")) { return; }
+			
+			  $.ajax({
+			    url: w2ui.w2uiGrid.url,
+			    type: "POST",
+			    dataType: "text", // <<< evita erro falso de parse
+			    data: {
+			      _action: "ativar",
+			      _id: recid,
+			      idwfprocesso: $("#idwfprocesso").val()
+			    },
+			    success: function() {
+			      w2ui.w2uiGrid.reload(function() {
+			        clearData();
+			        refreshEventToolbar();
+			      });
+			    },
+			    error: function(xhr, status) {
+			      // se executou e voltou 200 mas caiu no error, trata como ok
+			      if (xhr && xhr.status == 200) {
+			        w2ui.w2uiGrid.reload(function() {
+			          clearData();
+			          refreshEventToolbar();
+			        });
+			        return;
+			      }
+			      alert("Erro ao ativar o Evento. (" + status + " / HTTP " + (xhr ? xhr.status : "?") + ")");
+			      refreshEventToolbar();
+			    }
+			  });
+			};
+
+			clearData = function() {
+			    $("#_id").val("");
+			    clearValues();
+			    $(odwW2UIGridOptions.firstFocusInput).focus();
+			}
+
+			$("#form1").validate({
+				onkeyup: false,
+			    onclick: false,
+				onsubmit: false,
+				rules: {
+					descricao: {
+						required: true
+					}
+				},
+				messages: {
+					descricao: "Informe a Descrição"
+				}
+			});
+			$("#idwfprocessoevento").setMask();
+//			$("#descricao").focus(function(){
+//				  $(this).val("");
+//			});
+			actionInsert();			
+		});
+	</script>
+
+    <!--section-->
+
+	<div id="content_parameters" class="container1">
+		<form name="form1" id="form1" method="post" action="odwctrl?action=execTarefa&idTarefa=~~~"> -> $c{IDTAREFACRUD};
+			<fieldset>
+				<div id="w2uiGrid" style="width: 100%; height: 370px;"></div>
+				<table class="odw_form_edit">
+					<tr>
+						<td colspan="5">
+							<div id="form_edit_title" class="odw_form_edit_title"></div>
+						</td>
+					</tr>
+					<tr>
+						<td width="14%" class="input-label" id="idwfprocessoeventolabel">Cód.</td>
+						<td width="35%"><input name="idwfprocessoevento" id="idwfprocessoevento" type="text" size="20" maxlength="20" disabled="disabled" class="odw_parameter_input" alt="integer" odw="input"/></td>
+						<td width="2%"></td>
+						<td width="14%"></td>
+						<td width="35%"></td>
+					</tr>
+					<tr>
+						<td class="input-label">Descrição</td>	
+						<td colspan="4"><input name="descricao" id="descricao" type="text" size="50" maxlength="255" class="odw_parameter_input" odw="input"/></td>
+					</tr>
+					<tr>
+						<td class="input-label">Atividade Inicial</td>	
+						<td colspan="4">
+					       $> msgBuilder.parameter('idwfatividadeinicial type="text" class="odw_parameter_input" custom="odw=\'input\' odw_default_value=\'$c{idwfatividadeinicial#}\'" values="sql_var(sql_idwfatividadeinicial)"');
+						</td>
+					</tr>
+					<tr>
+						<td class="input-label">Atividade Expiração</td>	
+						<td colspan="4">
+					       $> msgBuilder.parameter('idwfatividaderealizadaexpiracao type="text" class="odw_parameter_input" custom="odw=\'input\' odw_default_value=\'$c{idwfatividaderealizadaexpiracao#}\'" values="sql_var(sql_idwfatividaderealizadaexpiracao)"');
+						</td>
+					</tr>
+					<tr>
+						<td class="input-label" id="tempoexpiracao">Tempo de Expiração</td>
+						<td><input name="tempoexpiracao" id="tempoexpiracao" type="integer" size="20" maxlength="20" class="odw_parameter_input" alt="integer" odw="input"/></td>
+						<td></td>
+						<td class="input-label">Tipo de Tempo</td>
+						<td>
+							<select name="tipotempoexpiracao" id="tipotempoexpiracao">
+								<option value=""></option>
+								<option value="MINUTO">Minuto</option>
+								<option value="DIA">Dia</option>
+								<option value="SEMANA">Semana</option>
+								<optiwon value="MES">Mês</option>																		
+							</select>
+						</td>
+					</tr>
+						<tr>
+							<td class="input-label">Comentário Apenas na Atv?</td>
+							<td>
+								<select name="comentariosapenasatividade" id="comentariosapenasatividade">
+									<option value="S">Sim</option>
+									<option value="N">Não</option>																	
+								</select>
+							</td>
+						</tr>
+				</table>
+				
+				<div id="buttons"></div>
+				<div id="content_parameters_bottom">
+					<div id="content_parameters_button">
+						<input name="btn_submit" type="submit" id="btn_submit" value="Enviar" class="odw_button_submit"/>
+					</div>
+				</div>
+				<input name="_id" id="_id" type="hidden" value=""/>
+				<input name="dataalteracao" id="dataalteracao" type="hidden" value=""/>
+				<input name="idusuarioalteracao" id="idusuarioalteracao" type="hidden" value=""/>
+				<input name="idwfprocesso" id="idwfprocesso" type="hidden" value="~~~"/> -> $v{idwfprocesso};
+			</fieldset>
+		</form>
+	</div>

@@ -1,0 +1,6 @@
+$> msgBuilder.setContentType('application/json');
+$> if ("$v{_action#}".equals("list") || "$v{_action#}".equals("list-atividadecolaborador") || "$v{_action#}".equals("list-atividadecolaborador-avaliable")) {
+	$> sb.append(msgBuilder.sqlVarToJSONW2UIGrid('sql', 'recid', $c{total#0}));
+$> } else if ("$v{_action#}".equals("insert") || "$v{_action#}".equals("update") || "$v{_action#}".equals("delete")) {
+	$> sb.append('$v{response}');
+$> }

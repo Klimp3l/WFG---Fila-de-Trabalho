@@ -1,0 +1,44 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+# Tarefa busca as ocorrências que estrapolaram o prazo de resolução e da baixa tanto na ocorrência quanto na última fila de trabalho.
+#   | Parâmetro                                      | Default | Descrição
+#   | WFProcessoEvento_idWFProcessoEvento            |         | 
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFProcessoEvento_idWFProcessoEvento}' as "WFProcessoEvento_idWFProcessoEvento"
+save_rows(1,1);
+
+set WFProcessoEvento_idWFProcessoEvento = '$v{WFProcessoEvento_idWFProcessoEvento}' + ('$v{WFProcessoEvento_idWFProcessoEvento_ForaDeMixEstZero#}'.equals('') ? '' : ', $v{WFProcessoEvento_idWFProcessoEvento_ForaDeMixEstZero}');
+set filtro_WFProcessoEvento_idWFProcessoEvento = '$v{WFProcessoEvento_idWFProcessoEvento#}'.equals('') ? '' : ' and o.idWFProcessoEvento in ($v{WFProcessoEvento_idWFProcessoEvento}) ';
+
+connect $v{ds_bridge};
+
+begin_transaction;
+
+sql_exec 
+Update 
+	WFOcorrencia o
+Set 
+	expirada = 'S',
+	idtarefaexecucaoexpiracao = $v{execId}
+Where
+	current_timestamp >= cast(o.dataexpiracao||' '||o.horaexpiracao as timestamp)
+	and o.expirada = 'N'
+	and o.idwffilatrabalhofinalizacao is null /* Ocorrência não foi finalizada */
+	$v{filtro_WFProcessoEvento_idWFProcessoEvento}
+;
+
+commit;

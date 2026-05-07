@@ -1,0 +1,30 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 08/05/2017 | Lucas        |             |    38535    | Criação. 
+
+~write_exec_log;
+
+# Tarefa gera a primeira fila de trabalho das ocorrências
+
+# Parâmetros
+# {0} - Apelido tarefa atribuição da nova fila de trabalho
+# {1} - WFOcorrencia_idWFProcessoEvento
+
+run_script_java_groovy HEAVEN-wf-gera-wffilatrabalho-inicial-include;
+
+<script_java_groovy name="HEAVEN-wf-gera-wffilatrabalho-inicial-include">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+
+	// Gera a fila de trabalho inicial
+	ExecScript execScriptChild1 = new ExecTarefa('HEAVEN-wfg-gera-wffilatrabalho-inicial', execScript).getExecScriptChild();
+	execScriptChild1.addVar('WFOcorrencia_idTarefaExecucaoInclusao', execScript.getValueVar('execId'));
+	execScriptChild1.run();
+
+	// Atribui a fila de trabalho aos usuários
+	ExecScript execScriptChild2 = new ExecTarefa({0}, execScript).getExecScriptChild();
+	execScriptChild2.addVar('WFOcorrencia_idWFProcessoEvento', {1});
+	execScriptChild2.run();
+</script_java_groovy>

@@ -1,0 +1,759 @@
+$> msgBuilder.setContentType("text/html");
+$> msgBuilder.setCharset("ISO-8859-1");
+
+<html>
+
+$> sb.append(head());
+
+<script_content name="head">
+
+	<head>
+	<meta http-equiv="Content-Type" content="text/html;charset=ISO-8859-1">
+
+	<link rel="stylesheet" href="js/bootstrap-3.2.0/css/bootstrap.min.css">
+	<link rel="stylesheet" href="js/bootstrap-table-1.8.1/bootstrap-table.min.css">
+
+	<link rel="stylesheet" href="https://code.jquery.com/ui/1.11.0/themes/smoothness/jquery-ui.css">
+
+	<style>
+		.row {
+			margin: 0 !important;
+		}
+		.input-lg, .form-horizontal .form-group-lg .form-control {
+		    font-size: 1em !important;
+		    line-height: normal;
+		}
+		.fixed-table-container thead th .th-inner {
+			white-space: normal;
+		}
+
+		/* AJUSTE: remove o bloco branco grande do header */
+		.fixed-table-header {
+			height: auto !important;
+		}
+		.fixed-table-container thead th {
+			vertical-align: middle !important;
+		}
+		.fixed-table-container thead th .th-inner {
+			padding: 6px 8px !important;
+			line-height: 1.15 !important;
+		}
+
+		th {
+		    text-align: center!important;
+		}
+		
+		div#custom-toolbar > * {
+			margin: 0 1px;
+		}
+
+		/* AJUSTE: reduz espaçamento entre toolbar e tabela */
+		.fixed-table-toolbar {
+			margin-bottom: 6px !important;
+		}
+
+		.search input {
+		    width: 100px !important; /* Defina a largura que desejar */
+		    height: 30px !important; /* Se quiser forçar a altura também */
+		    font-size: 14px !important;
+		}
+		.includeLoader {
+			display: none;
+			z-index: 9999;
+		}
+		.includeLoader.includeSpinner {
+		    border: 16px solid #f3f3f3; /* Light grey */
+		    border-top: 16px solid #3498db; /* Blue */
+		    border-radius: 50%;
+		    width: 120px;
+		    height: 120px;
+		    animation: spin 2s linear infinite;
+		    left: calc(50% - 60px);
+		    top: calc(50% - 60px);
+		    position: fixed;
+		}
+		.includeLoader.includeBackground {
+		    width: 100%;
+		    height: 100%;
+		    position: fixed;
+		    background: #00000059;    
+			left: 0;
+		    top: 0;
+		}
+		.includeLoader.includeText {
+			left: 40px;
+			top: calc(50% - -120px);
+			position: fixed;
+			color: white;
+			font-size: 17px;
+			font-weight: bold;
+			width: 100%;
+			text-align: center;
+		}
+		@keyframes spin {
+		    0% { transform: rotate(0deg); }
+		    100% { transform: rotate(360deg); }
+		}
+		.fixed-table-container thead th {
+		    background: #FFFFFF !important;   /* cor de fundo do header (ajuste se quiser) */
+		    color: #330000 !important;        /* cor do texto do header */
+		    font-weight: 700;
+		    border-bottom: 2px solid #1f2d3d;
+		}
+		
+		/* Garante que o header não crie scroll próprio */
+		.fixed-table-container .fixed-table-header {
+		    overflow: hidden !important;
+		}
+		
+		/* Scroll deve ficar apenas no body */
+		.fixed-table-container .fixed-table-body {
+		    overflow-y: auto !important;
+		}
+	</style>
+
+  </head>
+</script_content>  
+
+  
+  <body>
+
+	<div class="includeLoader includeBackground"></div>
+	<div class="includeLoader includeSpinner"></div>
+	<div class="includeLoader includeText">Processando, favor aguardar finalização da execução.</div>
+
+	<div class="row">
+		<div class="col-md-12" style="text-align: center">
+			~~~~ -> $c{opcaoselecionada};
+		</div>
+		$> sb.append(filtros());
+<script_content name="filtros">
+		<div class="col-md-12">
+		    <div id="custom-toolbar">
+				<button type="button" class="btn btn-success btn-md" onclick="doSave()">
+					<span class="glyphicon glyphicon-ok"></span> Salvar
+				</button>
+
+				<div class="btn-group" role="group" aria-label="...">
+
+					<div class="btn-group" role="group">
+						<button type="button" id="filter-departamento" class="btn btn-info btn-md btn-block dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							<span class="glyphicon glyphicon-filter"></span> Selecione um Departamento...
+						</button>
+						<ul class="dropdown-menu list-group"  style="width: 100%;">
+							$> for (a = 1; a <= $c{departamento:count}; a++) {
+								<li class="list-group-item" onclick="filterDepartamento(~~~)"><h4>~~~</h4></li> -> $c{iddepartamento[a]}; $c{departamento[a]};
+							$> }
+						</ul>
+				    </div>
+
+			 		<div class="btn-group" role="group">
+			            <button type="button" 
+								id="filter-setor" 
+								class="btn btn-warning btn-md btn-block dropdown-toggle" 
+								data-toggle="dropdown" 
+								aria-haspopup="true" 
+								aria-expanded="false">
+			                <span class="glyphicon glyphicon-filter"></span> Selecione um Setor...
+			            </button>
+			            <ul class="dropdown-menu list-group" style="width: 100%;">
+			                $> for (a = 1; a <= $c{setor:count}; a++) {
+			                    <li class="list-group-item" onclick="filterSetor(~~~)"><h4>~~~</h4></li> -> $c{idsetor[a]}; $c{setor[a]};
+			                $> }
+			            </ul>
+			        </div>
+
+					<div class="btn-group" role="group">
+			            <button type="button" 
+								id="filter-classe" 
+								class="btn btn-default btn-md btn-block dropdown-toggle" 
+								data-toggle="dropdown" 
+								aria-haspopup="true" 
+								aria-expanded="false">
+			                <span class="glyphicon glyphicon-filter"></span> Selecione uma Classe...
+			            </button>
+			            <ul id="filter-classe-options" class="dropdown-menu list-group" style="width: 100%;"></ul>
+			        </div>
+
+					<div class="btn-group" role="group">
+						<label class="btn btn-success btn-md" style="margin-bottom: 0;">
+							<input type="checkbox" id="filter-estoque" onchange="filterEstoque()" style="margin-right: 5px;">
+							<span class="glyphicon glyphicon-filter"></span> Saldo > 0
+						</label>
+					</div>		
+
+				    
+			        <button type="button" class="btn btn-primary btn-md" onclick="doExport()">
+					    <span class="glyphicon glyphicon-cloud-download"></span> Exportar
+					</button>
+				</div>
+				
+				<span type="button" class="title lead"></span>
+
+				<div class="btn-group" role="group" aria-label="...">
+					<button type="button" class="btn btn-danger btn-md" onclick="history.go(0)">
+					    <span class="glyphicon glyphicon-arrow-left"></span> Voltar
+					</button>
+			        <button type="button" class="btn btn-primary btn-md" onclick="location.href=\'odwctrl?action=menu\'">
+					    <span class="glyphicon glyphicon-tasks"></span> Menu
+					</button>
+				</div>
+
+				<div style="margin:6px 10px 0 10px;">
+					<div class="btn-group" role="group" aria-label="...">
+						<div class="btn-group" role="group">
+							<button type="button" id="apply-atividaderealizada" class="btn btn-info btn-md btn-block dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+								Selecione uma opção...
+							</button>
+							<ul class="dropdown-menu list-group"  style="width: 100%;">
+							$> for (a = 1; a <= $c{idwfatividaderealizada:count}; a++) {
+								<li class="list-group-item" onclick="setCurrAtvRealizada(~~~)"><h4>~~~</h4></li> -> $c{idwfatividaderealizada[a]}; $c{atividaderealizada[a]};
+							$> }
+							</ul>
+						</div>
+				        <button type="button" class="btn btn-primary btn-md" onclick="applyAtvRealizada()">
+						    Aplicar nos selecionados
+						</button>
+
+						<!-- NOVO: limpar selecionados (zera Resultado) -->
+						<button type="button" class="btn btn-default btn-md" onclick="clearAtvRealizada()">
+						    <span class="glyphicon glyphicon-trash"></span> Limpar selecionados
+						</button>
+					</div>
+				</div>
+		    </div>
+</script_content>   
+			<table id="data-table"></table>
+		</div>
+	</div>
+
+	<div id="modal" class="modal fade">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h1 class="modal-title"></h1>
+	      </div>
+	      <div class="modal-body">
+	      </div>
+	    </div><!-- /.modal-content -->
+	  </div><!-- /.modal-dialog -->
+	</div><!-- /.modal -->
+
+	<div id="sync-modal" class="modal fade">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="sync-modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Atenção</h4>
+	      </div>
+	      <div class="modal-body">
+	        Existem algumas atividades realizadas salvadas temporariamente, deseja salvar por definitivo agora?
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-default" data-dismiss="modal">Não</button>
+	        <button type="button" class="btn btn-success" onclick="doSave()"><span class="glyphicon glyphicon-ok"></span> Sim</button>
+	      </div>
+	    </div><!-- /.modal-content -->
+	  </div><!-- /.modal-dialog -->
+	</div><!-- /.modal -->
+
+  </body>
+
+	<script src="js/jquery-2.1.0.min.js" type="text/javascript" language="javascript"></script>
+
+	<script src="js/bootstrap-3.2.0/js/bootstrap.min.js" type="text/javascript" language="javascript"></script>
+
+    <script src="js/bootstrap-table-1.8.1/bootstrap-table.min.js"></script>
+    <script src="js/w2ui/w2ui-1.3.1.min.js" type="text/javascript" language="javascript"></script>
+	<script src="js/bootstrap-table-1.8.1/locale/bootstrap-table-pt-BR.min.js" charset="UTF-8"></script>
+
+	<script src="https://code.jquery.com/ui/1.11.0/jquery-ui.js"></script>
+
+    <script type="text/javascript">
+		let idempresa = ~~~~; -> $v{idempresa};
+		let idwfatividade = ~~~~; -> $v{idwfatividade};
+		let idusuario = ~~~~; -> $v{idUsuario};
+		let key = idempresa + '.' + idwfatividade + '.' + idusuario;
+		let keyCols = idwfatividade + '.' + idusuario + '.cols';
+
+		var idTarefa = ~~~; -> $v{idTarefa};
+		var $table;
+
+		var _idwfatividaderealizada = null;
+
+		let filterIdDepartamento = 0;
+		let filterIdSetor = 0;
+		let filterClasse = "";
+		let filterEstoqueAtivo = false;
+
+		var labels = {};
+
+		$> sb.append('\t\tlabels.idwfatividaderealizada  = [\n').append(msgBuilder.sqlVarToJSON('sql_idwfatividaderealizada')).append('\n\t\t];');
+		$> sb.append('\t\tlabels.iddepartamento  = [\n').append(msgBuilder.sqlVarToJSON('sql_iddepartamento')).append('\n\t\t];');
+		$> sb.append('\t\tlabels.idsetor = [\n').append(msgBuilder.sqlVarToJSON('sql_idsetor')).append('\n\t\t];');		
+		
+		$> sb.append('\t\tvar wfatividade = ').append(msgBuilder.sqlVarToJSON('sql_wfatividade')).append(';\n');
+		
+		$> sb.append('\t\tvar data = [\n').append(msgBuilder.sqlVarToJSON('sql_filadetrabalho')).append('\n\t\t];');
+
+  		let columns = [
+  			{ checkbox: true }
+		    ,{ field: "datainclusao", title: "Data Inclusão", align: "middle", visible: false, sortable: true,
+		    	formatter: function(value, row, index) { return formatDate(value, row, index,  "datainclusao")}
+		    }
+		    ,{ field: "datavencimento", title: "Data Vencimento", align: "middle", visible: false, sortable: true,
+		    	formatter: function(value, row, index) { return formatDate(value, row, index,  "datavencimento")}
+		    }		   		    
+		    ,{ field: "empresa", title: "Loja", align: "center", valign: "left", visible: false, sortable: true, width: "15%" }
+		    ,{ field: "familia", title: "Família", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "grupo", title: "Grupo", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "setor", title: "Setor", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "departamento", title: "Departamento", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "fornecedor", title: "Fornecedor", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "classe", title: "Classe", align: "left", valign: "middle", sortable: true, width: "50%", visible: false }
+		    ,{ field: "idproduto", title: "Cód. Produto", align: "right", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "codigobarras", title: "EAN", align: "right", valign: "middle", visible: true, sortable: true, width: "13%" }
+		    ,{ field: "produto", title: "Produto", align: "left", valign: "middle", sortable: true, width: "50%" }
+		    ,{ field: "dataultimaentrada", title: "Data Últ Entrada", align: "middle", visible: false, sortable: true,
+		    	formatter: function(value, row, index) { return formatDate(value, row, index,  "dataultimaentrada")}
+		    }
+		    ,{ field: "dataultimavenda", title: "Data Últ Venda", align: "middle", visible: false, sortable: true,
+		    	formatter: function(value, row, index) { return formatDate(value, row, index,  "dataultimavenda")}
+		    }	
+		    ,{ field: "dataprevisaosaida", title: "Data Previsão saida", align: "middle", visible: false, sortable: true,
+		    	formatter: function(value, row, index) { return formatDate(value, row, index,  "dataprevisaosaida")}
+		    }
+		    ,{ field: "classificacao", title: "Classificação", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "valorprecovenda", title: "R$", align: "right", valign: "middle", sortable: true, width: "5%",
+		    	formatter: function(value, row, index) { return realRender(value, row, index,  "valorprecovenda", 2) }
+		    }
+		    ,{ field: "recorrencia120dias", title: "Recorrência (120  dias)", align: "right", valign: "middle", sortable: true, width: "10%", visible: true,
+		    	formatter: function(value, row, index) { return integerRender(value, row, index,  "recorrencia120dias")}
+			}
+		    ,{ field: "diassemvenda", title: "Dias s/ Venda", align: "right", valign: "middle", sortable: true, width: "10%", visible: true,
+		    	formatter: function(value, row, index) { return integerRender(value, row, index,  "diassemvenda")}
+			}
+			,{ field: "diasentrada", title: "Dias de Entrada", align: "right", valign: "middle", sortable: true, width: "10%", visible: true,
+				formatter: function(value, row, index) { return integerRender(value, row, index,  "diasentrada")}
+			}
+			,{ field: "qtdultimaentrada", title: "Qtd. Últ. Entrada", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdultimaentrada", 3)}
+			}
+			,{ field: "qtdeultimavenda", title: "Qtd. Últ. Venda", align: "right", valign: "middle", sortable: true, width: "10%", visible: true,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdeultimavenda", 3)}
+			}
+			,{ field: "qtdunentrada", title: "Qtd. Embalagem Entrada", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdunentrada", 3)}	
+			}
+			,{ field: "qtdestoqueatual", title: "Qtd. Est. Atual", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdestoqueatual", 3)}	
+			}
+			,{ field: "qtdestoqueatualcd", title: "Qtd. Est. CD", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdestoqueatualcd", 3)}	
+			}
+			,{ field: "valestoqueparado", title: "Val. Est. Parado", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) { return realRender(value, row, index,  "valestoqueparado", 2)}
+			}
+			,{ field: "qtdeabastecimento", title: "Qtd. Abastecimento", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdeabastecimento", 3)}	
+			}
+			,{ field: "qtdeabastecer", title: "Qtd. Abastecer", align: "right", valign: "middle", sortable: true, width: "25%",  visible: false,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdeabastecer", 3)}	
+			}
+			,{ field: "qtdvendamedia", title: "Venda Média", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) { return decimalRender(value, row, index,  "qtdvendamedia", 2)}
+			}
+			,{ field: "observacao", title: "Observação", align: "left", valign: "middle", clickToSelect: false, sortable: true, width: "5%", visible: false,
+				formatter: function(value, row, index) { return textRender(value, row, index, "observacao") } 
+		    }			
+			,{ field: "idwfatividaderealizada", title: "Resultado", align: "center", valign: "middle", clickToSelect: false, sortable: true, visible: true,
+				formatter: function(value, row, index) {
+					if (value) {
+						doSaveTemp();
+					}
+					return dropDownRender(value, row, index, "idwfatividaderealizada")
+			}}
+		];
+		
+		let tempDataCols = JSON.parse(localStorage.getItem(keyCols));
+		if (tempDataCols) {
+			for (let i = 0; i<tempDataCols.length;i++) {
+				columns[i].visible = tempDataCols[i].visible;
+			}
+		}
+		
+		$(document).ready(function() {
+			w2utils.locale("js/w2ui/locale/pt-br.json");
+			$.extend($.fn.bootstrapTable.defaults, $.fn.bootstrapTable.locales["pt-BR"]);
+
+			function getTableHeight() {
+			    return $(window).height() - 50;
+			}	
+			$table = $("#data-table").bootstrapTable({
+			    data: data,
+			    height: getTableHeight(),
+			    toolbar: "#custom-toolbar",
+			    striped: true,
+			    pagination: true,
+			    pageSize: 10,
+			    pageList: [10, 20, 30, 60, 100, 200],
+			    search: true,
+			    showColumns: true,
+			    showRefresh: false,
+			    showToggle: false,
+			    minimumCountColumns: 2,
+			    clickToSelect: true,
+			    locale: "pt-BR",
+			    columns: columns
+			});
+
+			setTimeout(function() {
+				adjustHeaderScrollbarGutter();
+			}, 0);
+
+			$table.on(' column-switch.bs.table', function (field, checked) {
+				let data = $table.bootstrapTable('getOptions').columns;
+				localStorage.setItem(keyCols, JSON.stringify(data));
+				adjustHeaderScrollbarGutter();
+			});
+
+			$table.on('post-body.bs.table page-change.bs.table search.bs.table', function () {
+				adjustHeaderScrollbarGutter();
+			});
+			
+			$(window).resize(function() {
+				$table.bootstrapTable("resetView", { height: getTableHeight() });
+				adjustHeaderScrollbarGutter();
+			});
+			
+			$(".keep-open > button").addClass("btn-lg");
+			$(".search > input").addClass("input-lg");
+			
+			var $customToolbar = $("#custom-toolbar");
+			
+			$customToolbar.find(".title").html(wfatividade.descricao);
+			setupClasseFilter();
+			
+			$('.includeLoader').show();
+			syncData().then(r => {
+				$('.includeLoader').hide();
+				adjustHeaderScrollbarGutter();
+				
+				let tempData = localStorage.getItem(key);
+				if (tempData) {
+					console.log('TEM');
+					$("#sync-modal").modal('show');
+				}
+			});
+	     });
+
+		function syncData() {
+			return new Promise(resolve => {
+				let tempData = localStorage.getItem(key);
+				if (tempData) {
+					tempData = JSON.parse(tempData);
+					let data = $table.bootstrapTable('getData');
+					for (var i = 0; i < data.length; i++) {
+						var row = tempData.filter(index => (index.idwffilatrabalho === data[i].idwffilatrabalho))[0];
+						if (row) {
+							data[i] = row;
+							$table.bootstrapTable('updateRow', {index: i, row: data[i]});
+						}
+					}
+				}
+				resolve(true);
+			});
+		}
+
+		function doSaveTemp() {
+			let data = $.grep($table.bootstrapTable("getData"), function(r) { return r.idwfatividaderealizada });
+			if(JSON.stringify(data) === '[]'){
+				localStorage.removeItem(key);
+				return;
+			}
+			localStorage.setItem(key, JSON.stringify(data));
+		}
+
+	    function textRender(value, row, index, fieldName){
+	    	if (value == null || value == '') {
+	    		return [
+					\'<div class="input-group">\',
+						\'<input class="render" type="text" class="form-control"\'
+						+ \' onchange="NumberLoad(this, \' + index + \', \\\'\' + fieldName + \'\\\')"\'
+						+ \' name="\' + fieldName + \'"\'
+						+ \'/>\',
+					\'</div>\'
+		    	].join("");
+	    	}
+	    	return [
+				\'<div class="input-group">\',
+					\'<input class="render" type="text" class="form-control"\'
+					+ \' onchange="NumberLoad(this, \' + index + \', \\\'\' + fieldName + \'\\\')"\'
+					+ \' value="\' + value + \'"\'
+					+ \' name="\' + fieldName + \'"\'
+					+ \'/>\',
+				\'</div>\'
+	    	].join("");
+	    }  	
+
+		function doSave() {
+			$("#sync-modal").modal('hide');
+			$('.includeLoader').show();
+			var records = $.grep($table.bootstrapTable("getData"), function(r) { return r.idwfatividaderealizada });
+			if(JSON.stringify(records) === '[]'){
+				$('.includeLoader').hide();
+				confirm("Por favor. Selecione uma ação antes de salvar."); 
+				return false;
+			}
+		    $.ajax({
+		        type: "POST",
+		        dataType: "json",
+		        url: "odwctrl?action=execTarefa&ajax=true&scriptFunction=update&idTarefa=" + idTarefa,
+		        data: { wffilatrabalho: JSON.stringify(records) }, 
+		        contentType: "application/x-www-form-urlencoded; charset=ISO-8859-1",
+		        success: function(response) {
+		        	$('.includeLoader').hide();
+					if(showResponse(response)) {
+						localStorage.removeItem(key);
+						hideRows(getRecids(records).split(","));
+					}
+		        }
+		    });
+		}
+
+		function doExport() {
+		    $.ajax({
+		        type: "POST",
+		        dataType: "text",
+		        url: "odwctrl?action=execTarefa&ajax=true&scriptFunction=export&idTarefa=" + idTarefa,
+		        data: { wffilatrabalho: JSON.stringify($table.bootstrapTable("getData")) }, 
+		        contentType: "application/x-www-form-urlencoded; charset=ISO-8859-1",
+		        success: function(response) {
+		            $("<iframe>", { src: $(response).filter("a").attr("href") })
+		            	.hide()
+		            	.appendTo($("body"));
+		        }
+		    });
+		}
+
+		function getRecids(records) {
+			var recids = "0";
+			for(var r in records) {
+				recids += "," + records[r].recid;
+			}
+			return recids;
+		}
+
+		function showResponse(response) {
+			var error = response.error.length > 0;
+			$(".modal-title").html((error ? "<span class=\'glyphicon glyphicon-remove-circle\'></span>" : "<span class=\'glyphicon glyphicon-ok-circle\'></span> ") + response.msg);
+			$(".modal-body").html(error ? "<div class=\'alert alert-danger\' role=\'alert\'> " + response.error + "</div>" : "");
+			$("#modal").modal("show");
+			return !error;
+		}
+
+		function hideRows(recids) {
+			$table.bootstrapTable("remove", { field: "recid", values: recids });
+		}
+
+	    function setDropDown(rowIndex, fieldName, fieldValue) {
+			$table.bootstrapTable("updateCell", { rowIndex: rowIndex, fieldName: fieldName, fieldValue: fieldValue });
+	    }
+
+		function filterDepartamento(iddepartamento) {		
+			filterIdDepartamento = iddepartamento;
+			applyFilters();
+	    }
+
+		function filterSetor(idsetor) {		
+			filterIdSetor = idsetor;
+			applyFilters();
+	    }
+
+		function filterClasseValue(classe) {
+			filterClasse = classe || "";
+			applyFilters();
+	    }
+
+		function filterEstoque() {
+			filterEstoqueAtivo = $("#filter-estoque").is(":checked");
+			applyFilters();
+		}
+
+		function setupClasseFilter() {
+			let classes = [];
+			for (let i = 0; i < data.length; i++) {
+				if (data[i].classe) {
+					classes.push(data[i].classe);
+				}
+			}
+
+			classes = classes.filter(function(value, index, array) {
+				return array.indexOf(value) === index;
+			}).sort();
+
+			let html = '<li class="list-group-item" onclick="filterClasseValue(' + "'' " + ')"><h4>Todas as Classes</h4></li>';
+			for (let i = 0; i < classes.length; i++) {
+				let displayClasse = $("<div>").text(classes[i]).html();
+				html += '<li class="list-group-item" onclick="filterClasseValue(' + "'" + classes[i] + "'" + ')"><h4>' + displayClasse + '</h4></li>';
+			}
+
+			$("#filter-classe-options").html(html);
+		}
+
+		function applyFilters() {
+			$table.bootstrapTable('load', data);
+			
+			let par = {};
+			
+			if (filterIdDepartamento > 0) {
+				par.iddepartamento = filterIdDepartamento;
+			}
+			if (filterIdSetor > 0) {
+				par.idsetor = filterIdSetor;
+			}
+			if (filterClasse) {
+				par.classe = filterClasse;
+			}
+			
+			if (Object.keys(par).length > 0) {
+				$table.bootstrapTable('filterBy', par);
+			}
+			
+			if (filterEstoqueAtivo) {
+				let currentData = $table.bootstrapTable('getData');
+				let filteredData = currentData.filter(function(row) {
+					return parseFloat(row.qtdestoqueatual) > 0;
+				});
+				
+				$table.bootstrapTable('load', filteredData);
+			}
+
+			$("#filter-departamento").html(getText({ iddepartamento: filterIdDepartamento }, "iddepartamento", labels.iddepartamento));
+			$("#filter-setor").html(getText({ idsetor: filterIdSetor }, "idsetor", labels.idsetor));
+			$("#filter-classe").html(filterClasse ? '<span class="glyphicon glyphicon-filter"> Classe: </span> ' + filterClasse : '<span class="glyphicon glyphicon-filter"></span> Selecione uma Classe...');
+			adjustHeaderScrollbarGutter();
+	    }
+
+		function adjustHeaderScrollbarGutter() {
+		    if (!$table) return;
+		
+		    var $container = $table.closest('.fixed-table-container');
+		    var body = $container.find('.fixed-table-body')[0];
+		    if (!body) return;
+		
+		    var sbw = body.offsetWidth - body.clientWidth;
+		    $container.find('.fixed-table-header').css('padding-right', (sbw > 0 ? sbw : 0) + 'px');
+		}
+		
+	    function setCurrAtvRealizada(idwfatividaderealizada) {
+	    	_idwfatividaderealizada = idwfatividaderealizada;
+			var par = { idwfatividaderealizada: idwfatividaderealizada };
+			$("#apply-atividaderealizada").html(getText(par, "idwfatividaderealizada", labels.idwfatividaderealizada));
+	    }
+
+		function applyAtvRealizada() {
+			let allTableData = $table.bootstrapTable("getData");
+			let data = $table.bootstrapTable('getSelections');
+			console.log(data);
+			for (var i = 0; i < data.length; i++) {
+				for (var j = 0; j < allTableData.length; j++) {
+					if (data[i].recid === allTableData[j].recid) {
+						$table.bootstrapTable('updateRow', {
+							index: j,
+							row: {
+								idwfatividaderealizada: _idwfatividaderealizada,
+							}
+						});
+					}
+				}
+			}
+			doSaveTemp();
+			adjustHeaderScrollbarGutter();
+		}
+
+		function clearAtvRealizada() {
+			let allTableData = $table.bootstrapTable("getData");
+			let data = $table.bootstrapTable('getSelections');
+			console.log(data);
+			for (var i = 0; i < data.length; i++) {
+				for (var j = 0; j < allTableData.length; j++) {
+					if (data[i].recid === allTableData[j].recid) {
+						$table.bootstrapTable('updateRow', {
+							index: j,
+							row: {
+								idwfatividaderealizada: null,
+							}
+						});
+					}
+				}
+			}
+			doSaveTemp();
+			adjustHeaderScrollbarGutter();
+		}
+
+	    function dropDownRender(value, row, index, fieldName) {
+			return [
+			    \'<div class="dropdown">\',
+			      \'<button type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn btn-\' + (value ? \'success\' : \'info\') +  \' btn-lg btn-block dropdown-toggle">\',
+					value ? getText(row, fieldName, labels[fieldName]) : "Selecione uma opção...",
+				\'</button>\',
+				\'<ul class="dropdown-menu list-group"  style="width: 100%;"><li>\',
+					getDropDownList(index, fieldName, labels[fieldName]),
+				\'</li></ul>\',
+			    \'</div>\'
+			].join("");
+	    }
+
+		Number.prototype.format = function(c, d, t) {
+			var n = this, 
+			    c = isNaN(c = Math.abs(c)) ? 2 : c, 
+			    d = d == undefined ? "," : d, 
+			    t = t == undefined ? "." : t, 
+			    s = n < 0 ? "-" : "", 
+			    i = String(parseInt(n = Math.abs(Number(n) || 0).toFixed(c))), 
+			    j = (j = i.length) > 3 ? j % 3 : 0;
+			   return s + (j ? i.substr(0, j) + t : "") + i.substr(j).replace(/(\\d{3})(?=\\d)/g, "$1" + t) + (c ? d + Math.abs(n - i).toFixed(c).slice(2) : "");
+		};
+
+		function realRender(value, row, index, fieldName, dc) {
+			return value === null ? "-" : "R$ " + value.toFixed(2).replace(".", ",").replace(/(\\d)(?=(\\d{3})+\\,)/g, "$1.");
+		}
+
+	    function decimalRender(value, row, index, fieldName, dc) {
+			return value === null ? "-" : Number(value).format(2);
+		};
+
+		function integerRender(value, row, index, fieldName) {
+			return value === null ? "-" : Number(value).format(0);
+		};
+
+		function formatDate(value, row, index, fieldName) {
+			return value === null ? "-" : value.length > 10 ? w2utils.formatDate(value.slice(0,10), 'dd/mm/yyyy') + ' ' + value.slice(10)  : w2utils.formatDate(value);
+		}
+
+		function getText(record, col, lab) {
+			for (var i in lab) {
+				if (lab[i].id == record[col]) {
+					return lab[i].text;
+				}
+			}
+			return "";
+		}
+
+		function NumberLoad(el, rowIndex, fieldName) {
+			console.log('NumberLoad', el.value);
+			$table.bootstrapTable("updateCell", { rowIndex: rowIndex, fieldName: fieldName, fieldValue: el.value });
+		}		
+
+	    function getDropDownList(index, fieldName, list) {
+			var html = "";
+			for(var i in list) {
+				html += "<li class=\\"list-group-item\\" onclick=\\"setDropDown(" + [ index, "\'" + fieldName + "\'",  list[i].id].join() + ")\\\"><h4>" + list[i].text + "</h4></li>";
+			}
+			return html;
+	    }
+    </script>
+  
+</html>

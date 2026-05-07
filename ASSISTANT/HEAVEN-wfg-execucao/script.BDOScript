@@ -1,0 +1,71 @@
+# versão 1.0
+
+# Alterações:
+# |    Data    |  Programador    | Solicitante | Caso Mantis | Descrição 
+# | 28/04/2026 | Bernardo        |             | 38535       | Criação.
+
+~write_exec_log;
+
+$include{HEAVEN-script-sql-busca-config-tarefa,"'$v{apelido}'"}include
+
+connect $v{ds_bridge};
+
+sql 
+With 
+	tarefas as (
+		Select
+			wt.apelidoTarefa
+			,wt.jsonbParametros
+		From
+			WfgTarefa wt
+		Where
+			wt.apelidoTarefaMae = '$v{apelido}'
+		Order By 
+			wt.ordemExecucao
+	)
+Select
+	'' as email,
+	0 as tipo,
+	t.apelidoTarefa as id,
+	jsonbParametros as jsonbparametros
+From
+	tarefas t
+sql_var(sql_for_each);
+
+for_each_dest <columnDest>email</columnDest>
+	<columnDestType>tipo</columnDestType>
+	<columnId>id</columnId>
+	<sqlVar>$v{sql_for_each}</sqlVar>;
+
+~write_exec_log;
+
+run_script_java_groovy run;
+
+<script_java_groovy name="run">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+	import groovy.json.JsonSlurper;
+
+	ExecScript execScriptChild = new ExecTarefa(execScript.getValueVar('id'), execScript).getExecScriptChild();
+
+	def rawCFG = execScript.getValueCol('CLIENTE-wfg-cfg');
+	rawCFG = new JsonSlurper().parseText(rawCFG.toString());
+
+	def rawParams = new JsonSlurper().parseText(execScript.getValueVar('jsonbparametros'));
+	def filters = rawParams.filters;
+
+	for (def param : filters) {
+		if (param == null) continue;
+		String key = param.key != null ? param.key.toString() : '';
+		def val = param.value;
+		String valueStr = val != null ? val.toString() : '';
+		if (!key) continue;
+		execScriptChild.addVar(key, valueStr);
+	}
+
+	execScriptChild.addVar('WFProcesso_idWFProcesso', rawCFG['CLIENTE-wfg-cfg-WFProcesso_idWFProcesso']);
+	execScriptChild.addVar('WFProcessoEvento_idWFProcessoEvento', rawCFG['CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento']);
+	execScriptChild.addVar('WFOcorrencia_apelidoTarefaEncaminhamento', rawCFG['CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento']);
+	
+	execScriptChild.run();
+</script_java_groovy>

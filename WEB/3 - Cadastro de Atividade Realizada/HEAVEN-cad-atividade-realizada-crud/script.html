@@ -1,0 +1,20 @@
+$> msgBuilder.setContentType('application/json');
+$> if ("$v{_action#}".equals("list")) {
+	$> sb.append(msgBuilder.sqlVarToJSONW2UIGrid('sql', 'recid', $c{total#0}));
+$> } else if ("$v{_action#}".equals("insert") || "$v{_action#}".equals("update") || "$v{_action#}".equals("delete")) {
+	$> sb.append('$v{response}');
+$> } else if ("$v{_action#}".startsWith("autocomplete_")) {
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sql_autocomplete')).append(']');
+$> } else if (false && "$v{_action#}".equals("flowdata")) {
+	graph TD
+	$> for (a = 1; a <= $c{node:count}; a++) {
+		~~~-> $c{node[a]} l;
+	$> }
+	F((Finaliza));
+$> } else if ("$v{_action#}".equals("flowdata")) {
+	$> sb.append('{')
+	$> 	.append('"root":').append(execScript.getValueCol('root')).append(',')
+	$> 	.append('"nodes":').append(execScript.getValueCol('nodes')).append(',')
+	$> 	.append('"edges":').append(execScript.getValueCol('edges')).append('')
+	$> sb.append('}')
+$> }

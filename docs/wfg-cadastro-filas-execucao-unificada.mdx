@@ -1,0 +1,290 @@
+---
+sidebar_position: 10
+tags:
+  - Observador
+  - Técnica
+  - Workflow
+  - Fila
+iandev:
+  docType: Integração
+  docBase: Técnica
+---
+
+import Mermaid from '@theme/Mermaid';
+
+# 🔷 WFG Cadastro de Filas e Execução Unificada de Ocorrências
+
+Esta documentação define o recurso de cadastro de filas no padrão WFG e o novo motor unificado de geração de ocorrências para o Observador.  
+O objetivo é substituir execuções duplicadas por um contrato único de parâmetros e filtros, com paralelismo por fila e trilha de auditoria completa.
+
+## 1. Título e Descrição Geral
+
+O cadastro WFG será a camada de configuração funcional para montar filas de execução reutilizáveis.  
+Cada fila cadastrada informa:
+
+1. Identificação da fila e status de versão.
+2. Processo e evento de workflow alvo.
+3. Parâmetros específicos de geração de ocorrência.
+4. Filtros genéricos de escopo de execução.
+5. Política de execução paralela e reprocessamento.
+
+O executor unificado será responsável por interpretar esse cadastro e gerar ocorrências em `WFOcorrencia` e filas em `WFFilaTrabalho`, sem travar execuções irmãs em caso de erro.
+
+## ⚙️ Tipo de Execução
+
+1. Execução agendada por tarefa orquestradora.
+2. Execução manual sob demanda pelo painel WFG.
+3. Execução isolada por fila com resultado consolidado no final.
+
+## 🧩 Tarefas Envolvidas
+
+### Base atual reutilizada
+
+1. `HEAVEN-execTarefas` para paralelismo e isolamento de erro.
+2. `HEAVEN-wf-gera-wffilatrabalho-inicial-include` para geração da fila inicial.
+3. Tarefas atuais de `WF - Execution` como origem da regra de negócio por cenário.
+
+### Novos componentes propostos
+
+1. `HEAVEN-wfg-cadastro-filas` para cadastro WEB no padrão Element.
+2. `HEAVEN-wf-execucao-fila-unificada` como orquestrador principal.
+3. `HEAVEN-wf-motor-gera-ocorrencia` como motor único parametrizável.
+4. `HEAVEN-wf-log-execucao-fila` para persistência estruturada de logs.
+
+## 🔁 Fluxo Geral
+
+<Mermaid
+  value={`flowchart LR
+    cadastroWFG[Cadastro WFG] --> versaoFila[Versao da Fila]
+    versaoFila --> orquestrador[Execucao Orquestrador]
+    orquestrador --> filaA[Execucao Fila A]
+    orquestrador --> filaB[Execucao Fila B]
+    filaA --> motorUnificado[Motor Unificado]
+    filaB --> motorUnificado
+    motorUnificado --> wfOcorrencia[WFOcorrencia]
+    motorUnificado --> wfFila[WFFilaTrabalho]
+    filaA --> logExecucao[Log Estruturado]
+    filaB --> logExecucao
+    motorUnificado --> logExecucao
+  `}
+/>
+
+## 🧠 Modelo de Nós com Orientação a Objeto
+
+O builder WFG deve representar cada nó como objeto de domínio, semelhante ao modelo de ferramentas como n8n, para reduzir acoplamento e facilitar extensão.
+
+### Contrato conceitual dos nós
+
+1. `NodeBase` define ciclo de vida comum.
+2. `GenerationNode` executa geração de ocorrências.
+3. `FilterNode` aplica filtros genéricos e específicos.
+4. `DecisionNode` roteia execução por condição.
+5. `NotificationNode` dispara alertas e notificação operacional.
+
+### Ciclo de execução orientado a objeto
+
+<Mermaid
+  value={`flowchart TD
+    nodeFactory[NodeFactory] --> nodeBase[NodeBase]
+    nodeBase --> beforeRun[beforeRun]
+    beforeRun --> executeNode[execute]
+    executeNode --> afterRun[afterRun]
+    afterRun --> emitMetrics[emitMetrics]
+    executeNode --> nextNode[Next Node]
+  `}
+/>
+
+### Boas práticas de implementação
+
+1. Cada nó deve expor `validate`, `execute`, `serialize`.
+2. O payload serializado do nó deve ser versionado.
+3. Regras de negócio de SQL devem ficar no motor e não no componente visual.
+4. O builder visual deve somente montar o grafo e parâmetros.
+
+## 📥 Contrato Técnico de Entrada e Saída
+
+### Payload de entrada da execução unificada
+
+```json
+{
+  "executionContext": {
+    "executionId": "uuid",
+    "triggerType": "schedule",
+    "userId": 123
+  },
+  "queueConfig": {
+    "queueId": 10,
+    "queueVersion": 3,
+    "wfProcessId": 20,
+    "wfProcessEventId": 55,
+    "routingTaskAlias": "HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico"
+  },
+  "specificParams": {
+    "diasSemVenda": 30,
+    "prioridadePadrao": "A"
+  },
+  "genericFilters": {
+    "empresaIn": [1, 2, 4],
+    "mercadologicoExcluido": [99],
+    "curvaAbc": ["A", "B"]
+  },
+  "executionPolicy": {
+    "parallelEnabled": true,
+    "maxThreads": 6,
+    "retryLimit": 2
+  }
+}
+```
+
+### Payload de saída por fila executada
+
+```json
+{
+  "queueId": 10,
+  "status": "success",
+  "durationMs": 1840,
+  "stats": {
+    "candidateRows": 322,
+    "insertedOccurrences": 88,
+    "insertedWorkQueues": 88
+  },
+  "errors": []
+}
+```
+
+## 🧱 Arquitetura de Execução Unificada
+
+### Camadas
+
+1. Camada de cadastro WEB.
+2. Camada de orquestração de execuções.
+3. Camada de motor SQL parametrizado.
+4. Camada de logging e observabilidade.
+
+### Sequência operacional
+
+1. Carregar filas ativas e versões publicadas.
+2. Montar contexto de execução por fila.
+3. Distribuir execuções conforme política de threads.
+4. Processar geração de ocorrência no motor único.
+5. Chamar include de geração de fila inicial.
+6. Consolidar métricas e status final.
+
+## 🧵 Estratégia de Paralelismo e Isolamento de Falhas
+
+### Diretrizes
+
+1. Usar `ExecutorService` com limite configurável de threads.
+2. Cada fila deve executar em contexto independente.
+3. Falha de uma fila não interrompe filas irmãs.
+4. O resultado final deve trazer sucesso e erro por fila.
+5. Habilitar modo sequencial por parâmetro quando necessário.
+
+### Regras de segurança operacional
+
+1. Definir timeout por fila.
+2. Registrar stack e payload resumido em caso de exceção.
+3. Aplicar retries controlados por política da fila.
+4. Encaminhar filas falhas para reprocessamento manual quando limite for atingido.
+
+## 📊 Monitoramento e Logs
+
+### Log obrigatório por execução
+
+1. Identificação de execução e fila.
+2. Input de parâmetros e filtros aplicados.
+3. SQL lógico executado ou identificador da estratégia SQL.
+4. Totais de candidatos, inseridos e ignorados.
+5. Output final e mensagens de erro.
+6. Tempos de início, fim e duração.
+
+### Exemplo de estrutura de log
+
+```json
+{
+  "executionId": "uuid",
+  "queueId": 10,
+  "stage": "motor_ocorrencia",
+  "input": {
+    "wfProcessEventId": 55,
+    "specificParams": { "diasSemVenda": 30 },
+    "genericFilters": { "empresaIn": [1, 2, 4] }
+  },
+  "output": {
+    "candidateRows": 322,
+    "insertedOccurrences": 88
+  },
+  "status": "success",
+  "startedAt": "2026-04-27T12:00:00Z",
+  "finishedAt": "2026-04-27T12:00:01Z",
+  "durationMs": 1840
+}
+```
+
+### Persistência mínima sugerida
+
+```sql
+insert into WFGLogExecucaoFila
+(
+  idExecucao,
+  idFila,
+  etapa,
+  status,
+  inputJson,
+  outputJson,
+  dataInclusao,
+  horaInclusao
+)
+values
+(
+  :idExecucao,
+  :idFila,
+  :etapa,
+  :status,
+  cast(:inputJson as jsonb),
+  cast(:outputJson as jsonb),
+  current_date,
+  cast(current_time as char(8))
+);
+```
+
+## 🗺️ Plano de Adaptação das Tarefas `WF - Execution`
+
+### Estratégia de migração por fases
+
+1. Levantar todas as tarefas `HEAVEN-wf-gera-ocorrencia-*` e classificar por família de regra.
+2. Extrair parâmetros variáveis e filtros de cada família.
+3. Criar templates de estratégia SQL no motor unificado.
+4. Migrar primeiro cenários de menor risco para homologação.
+5. Migrar cenários críticos com execução paralela controlada.
+6. Desativar gradualmente tarefas legadas após estabilização.
+
+### Mapeamento inicial de equivalência
+
+1. Tarefa legada de geração vira configuração de fila WFG.
+2. `script.BDOScript` específico vira estratégia SQL registrada.
+3. Execução encadeada em série vira execução por fila no orquestrador.
+4. Includes de fila e encaminhamento continuam reaproveitados.
+
+## ✅ Critérios de Aceite
+
+1. Cadastrar uma fila completa no layout WFG sem customização de código.
+2. Executar múltiplas filas em paralelo com isolamento de falha comprovado.
+3. Gerar ocorrências e filas corretamente em `WFOcorrencia` e `WFFilaTrabalho`.
+4. Registrar logs de Input, Output, parâmetros e filtros para cada fila.
+5. Permitir reprocessamento manual de fila com erro via painel.
+6. Manter compatibilidade com o padrão WEB atual baseado em Element.
+
+## 📚 Referências Técnicas Aplicadas
+
+1. `WEB/Cadastro de Colaborador - Observador Digital/HEAVEN-cadastro-de-colaboradores/script.html` como padrão de tela WEB.
+2. `WEB/Cadastro de Colaborador - Observador Digital/HEAVEN-cadastro-de-colaboradores/script.BDOScript` como base de contrato `script_function`.
+3. `ASSISTANT/execTarefas - HEAVEN/HEAVEN-execTarefas/script.BDOScript` como base de paralelismo e isolamento.
+4. `WF - Execution/WF - Auditoria de Produtos na área de Vendas - Execução/HEAVEN-wf-gera-ocorrencia-auditoriaprodutosareavendas/script.BDOScript` como base de geração de ocorrência.
+5. `docs/wf-fila-trabalho-funcionamento.md` como base funcional de processo, ocorrência e fila.
+6. `mockup-wfg-layout.html` como referência visual para evolução de UX da nova tela de cadastro.
+
+## ✅ Conclusão
+
+O recurso WFG passa a centralizar configuração e execução de filas com um único motor de ocorrências, reduzindo duplicidade técnica e elevando a rastreabilidade operacional.  
+A combinação entre contrato único, paralelismo controlado e logging estruturado cria base segura para evolução contínua das rotinas de `WF - Execution`.

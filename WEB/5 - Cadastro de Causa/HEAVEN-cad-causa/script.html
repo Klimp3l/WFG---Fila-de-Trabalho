@@ -1,0 +1,121 @@
+$> msgBuilder.setHtmlTemplates('w2ui01.html', 'w2ui01-odw2.html');
+$> msgBuilder.setContentSections('head', 'body');
+$> msgBuilder.setReplaceVarsOnTemplate(true);
+
+<style type="text/css">
+	.container1 {
+		width: 610px;
+	}
+</style>
+
+<script type="text/javascript">
+	$(document).ready(function () {
+		setOdwW2UIGridOptions({ idTarefaCRUD: ~~~, -> $c{ IDTAREFACRUD };
+		idInput: "#idwfcausa", firstFocusInput: "#descricao",
+			msgDelete: "Confirma a exclusão da causa {id} ?",
+				w2uiFolder: "w2ui-1.4.2"
+	});
+	configOdwForm();
+
+	$("#w2uiGrid").w2grid({
+		name: "w2uiGrid",
+		url: "odwctrl?action=execTarefa&idTarefa=~~~&ajax=true", -> $c{ IDTAREFACRUD };
+	postData: { _action: "list" },
+	header: "Causa",
+		show: { header: true, toolbar: true, footer: true },
+	multiSearch: false,
+		reorderColumns: true,
+			searches: [
+				{ field: "descricao", caption: "Descrição", type: "text" }
+			],
+				sortData: [
+					{ field: "idwfcausa", direction: "ASC" }
+				],
+					columns: [
+						{ field: "idwfcausa", caption: "Cód.", size: "5%", sortable: true, searchable: false },
+						{ field: "descricao", caption: "Descrição", size: "40%", sortable: true, searchable: true },
+						{ field: "situacao", caption: "Situação", size: "10%", sortable: true, searchable: true },
+					],
+						onClick: function(event) {
+							var record = this.get(event.recid);
+							displayData(record);
+						},
+	onToolbar: function(event) {
+		var id = event.target;
+		if (id == "btnAdd") {
+			actionInsert();
+		} else if (id == "btnCopy") {
+			actionCopy();
+		} else if (id == "btnDelete") {
+			actionDelete(w2ui.w2uiGrid.getSelection());
+		}
+	}
+			});
+	w2ui.w2uiGrid.toolbar.add([{ type: "button", id: "btnAdd", caption: "Incluir", img: "w2ui-icon-plus" },
+	{ type: "button", id: "btnCopy", caption: "Copiar", img: "w2ui-icon-plus" },
+	{ type: "button", id: "btnDelete", caption: "Excluir", img: "w2ui-icon-cross" }]);
+
+	clearData = function () {
+		$("#_id").val("");
+		clearValues();
+		$(odwW2UIGridOptions.firstFocusInput).focus();
+	}
+
+	$("#form1").validate({
+		onkeyup: false,
+		onclick: false,
+		onsubmit: false,
+		rules: {
+			descricao: {
+				required: true
+			}
+		},
+		messages: {
+			descricao: "Informe a descrição"
+		}
+	});
+
+	$("#idwfcausa").setMask();
+	actionInsert();
+			
+		});
+</script>
+
+<!--section-->
+
+<div id="content_parameters" class="container1">
+	<form name="form1" id="form1" method="post" action="odwctrl?action=execTarefa&idTarefa=~~~"> -> $c{IDTAREFACRUD};
+		<fieldset>
+			<div id="w2uiGrid" style="width: 100%; height: 370px;"></div>
+			<table class="odw_form_edit">
+				<tr>
+					<td colspan="5">
+						<div id="form_edit_title"" class=" odw_form_edit_title"></div>
+					</td>
+				</tr>
+				<tr>
+					<td width="100px">Cód.</td>
+					<td width="150px"><input name="idwfcausa" id="idwfcausa" type="text" size="20" maxlength="20"
+							disabled="disabled" class="odw_parameter_input" alt="integer" odw="input" /></td>
+					<td width="350px">&nbsp;</td>
+				</tr>
+				<tr>
+					<td>Descrição</td>
+					<td colspan="4"><input name="descricao" id="descricao" type="text" size="50" maxlength="255"
+							class="odw_parameter_input" odw="input" /></td>
+				</tr>
+
+			</table>
+
+			<div id="buttons"></div>
+			<div id="content_parameters_bottom">
+				<div id="content_parameters_button">
+					<input name="btn_submit" type="submit" id="btn_submit" value="Enviar" class="odw_button_submit" />
+				</div>
+			</div>
+			<input name="_id" id="_id" type="hidden" value="" />
+			<input name="dataalteracao" id="dataalteracao" type="hidden" value="" />
+			<input name="idusuarioalteracao" id="idusuarioalteracao" type="hidden" value="" />
+		</fieldset>
+	</form>
+</div>

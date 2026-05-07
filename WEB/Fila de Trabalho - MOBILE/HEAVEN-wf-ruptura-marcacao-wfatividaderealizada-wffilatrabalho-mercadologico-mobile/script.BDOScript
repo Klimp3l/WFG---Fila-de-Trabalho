@@ -1,0 +1,431 @@
+# versao 4.7
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição
+# | xx/xx/xxxx | Lucas       |             |             | Criação.
+# | 13/05/2019 | Giovani     | Julio       | 17164       | Adicionado coluna de empresa.
+# | 24/08/2019 | Giovani     | Elcio       | 			 | Adicionado recurso para salvar as atividades realizadas no cache.
+# | 25/10/2019 | Giovani     | 		       | 18066		 | Adicionado recurso para salvar as colunas ref. a atividade selecionada no cache.
+# | 15/01/2020 | Giovani     | Julio       | 18998       | Adicionado coluna fornecedor e venda média.
+# | 21/02/2020 | Giovani     | Julio       | 19276       | Alterado forma de buscar o estoque atual (antes buscava o estoque no momento de inclusão da ocorrência).
+# | 17/03/2020 | Giovani     | Julio       | 17164       | Adicionado configuração de apelido tarefa encaminhamento.
+# | 20/03/2020 | Anderson    | 		       | 19666       | Adicionado Mensagem para quando o botão de salvar for clicado e não tiver ação para salvar
+# | 22/07/2020 | Giovani     | Stephanie   | 19936       | Adicionado seleção de vários itens para marcação ao mesmo tempo de atividade realizada, em uma unica seleção.
+# | 27/07/2020 | Anderson    | Julio	   | 20749       | Adicionado coluna de datavencimento
+# | 15/04/2021 | Giovani     | Julio       | 23374       | Adicionado coalesce na informação de empresa na atividade, devido erro na página.
+# | 08/08/2021 | Giovani     | Claudson    | 24438       | Adicionado coluna recorrencia120dias.
+# | 18/08/2021 | Anderson    | Julio	   | 24575       | Adicionado opção de todos os departamentos no filtro
+# | 20/08/2021 | Anderson 	 | Julio 	   | 24575 		 | Adicionado filtro de local estoque 
+# | 24/08/2021 | Giovani     | Claudson    | 24515       | Adicionado colunas (data ult entrada, data ult venda, qtd ult venda).
+# | 01/09/2021 | Giovani     | Julio       |             | Adicionado coluna Classe.
+# | 15/01/2022 | Elcio       | Marino      | 25886		 | Apresentando agora o id da empresa a direita do nome da atividade. Isso ajudará nas investigações futuras. 
+# | 16/05/2022 | Anderson    | Julio       | 25886		 | Adicionado campo wffilatrabalho.observacao com opção de edição e salvamento
+# | 29/06/2022 | Bernardo    | Julio       | 27574		 | Adicionado campo datavencimento no template do excel
+# | 14/07/2022 | Bernardo    | Marcos      | 27755		 | Ajustado ordenção das datas, antes vinha dd/MM/yyyy e ordenava por yyyy/MM/dd oque gerava erro, agora é enviado yyyy/MM/dd e formata no front para dd/MM/yyyy
+# | 18/07/2022 | Bernardo    | Julio       | 27785		 | Ajustado formatação para quando a data tiver hora junto;
+# | 19/07/2022 | Anderson    | Julio       | 27810		 | Ajustado formatação de data inclusão
+# | 25/07/2022 | Elcio       | Jose        | 27878       | Adicionado Entrada no Label  Qtde de Embalagem
+# | 03/12/2022 | Anderson    | Julio       | 26786       | Adicionado data de previsão e classificação
+# | 19/01/2023 | Bernardo    | Julio       | 29279       | Fixado cabeçalho da table no html.
+# | 22/03/2023 | Bernardo    | Generoso    | 29772       | Adicionado colunas de Dt. ult. Venda/Compra na exportação em excel.
+# | 06/04/2024 | Elcio       | Rede Plus   | 32906       | Saldo de estoque filtrando por localvenda = 'S' 
+# | 08/05/2024 | Elcio       | Rede Plus   | 33143       | Criado configuraçao HEAVEN-cfg-filtraempresacolaborador para buscar registros das empresas ligadas ao colaborador. 
+# | 21/05/2024 | Vinicius    | Julio       | 33143       | Adicionado coluna Loja ao relatorio excel.  
+# | 02/12/2024 | Bernardo	 | Eudione     | 33287	     | Adicionado ddescrição da opção selecionada.
+# | 26/02/2025 | Douglas	 | Élcio       | 35249	     | Adicionado filtro setor
+# | 29/07/2025 | Bernardo	 | Júlio       | 34987	     | feat(Filtro Estoque) Adicionado filtro de estoque > 0.
+# | 09/01/2026 | Bruno		 | 	Mithio     | 37896	     | Adicionado botão de limpar selecionados na coluna 'Resultado'.
+# | 15/01/2026 | Bruno		 | 	Marcos     | 37955	     | Ajustado o grid (bootstrap-table) para manter o cabeçalho fixo durante a rolagem.
+# | 06/05/2026 | Bernardo	 | 			   | 38535	     | Adicionado o filtro de classe do produto.
+
+set _iframe = true;
+
+write_exec_log;
+
+$include{HEAVEN-script-sql-busca-config-tarefa, "'$v{apelido}'"}include
+set apelidotarefaencaminhamento = '$c{HEAVEN-cfg-apelidotarefaencaminhamento#}'.equals('') ? 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico' : '$c{HEAVEN-cfg-apelidotarefaencaminhamento#}';
+set filtroLocalEstoque       	=	"$c{HEAVEN-cfg-idlocalestoque#}".equals("") ?  "" : "and esa.idlocalestoque in ($c{HEAVEN-cfg-idlocalestoque})";
+
+connect $v{ds_bridge};
+
+sql 
+select 
+	e.idempresa||'.'||a.idwfatividade idwfatividade,
+	-- p.descricao||' - ('||e.idempresa||' - '||coalesce(e.apelido, e.nomefantasia)||') - '||a.descricao 
+	'Processo: '||trim(p.descricao)||' - '||cast(p.idwfprocesso as varchar(100))||' | Loja: '||e.apelido||' | Atividade: '||trim(a.descricao)||' - '||cast(a.idwfatividade as varchar(100)) as descricao
+from 
+	wfatividade a
+	inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
+	cross join empresa e
+where exists (
+	select 	null 
+	from 	wffilatrabalho f 
+			inner join wfocorrencia o on o.idwfocorrencia = f.idwfocorrencia
+	where 	(f.idusuarioresponsavel = $v{idUsuario} or $v{idUsuario} = 2)
+			and f.idwfatividaderealizada is null 
+			and f.expirada = 'N'
+			and o.expirada = 'N'
+			and o.idwffilatrabalhofinalizacao is null
+			and o.apelidotarefaencaminhamento = '$v{apelidotarefaencaminhamento}'
+			and f.idwfatividade = a.idwfatividade
+			and f.idempresa = e.idempresa
+) 
+order by 2
+sql_var(sql_idwfatividade);
+
+stop_if $c{idwfatividade:count} == 0;
+
+<html_head>
+	<style>
+		.container1 {
+			width: 500px;
+		}
+	</style>
+</html_head>
+
+parameter idwfatividade label="Atividade" type="string" values="sql_var(sql_idwfatividade)";
+
+set idempresa = '$v{idwfatividade}'.split('[.]')[0];
+set idwfatividade = '$v{idwfatividade}'.split('[.]')[1];
+
+
+set filtroempresa = ' and ft.idempresa = $v{idempresa}';
+
+################################
+# Situação de configuração que independente do Processo que o usuário escolher, Se configurado como S, irá carregar 
+# os registros de todas as empresas ligadas no cadastro do Colaborador ligado ao usuário logado. 
+#  Caso a configuração for N, irá carregar os registros da empresa que o usuário selecionou no parametro. 
+###################################
+if '$c{HEAVEN-cfg-filtraempresacolaborador#}' == 'S';
+	sql 
+	Select 
+		string_agg(cast(cf.idempresa as varchar(100)),',') as idempresascolaborador
+	From 
+		usuario u
+		inner join colaborador c on (c.idcolaborador = u.idcolaborador)
+		inner join colaboradorfuncao cf on (cf.idcolaborador = c.idcolaborador)
+	Where 
+		u.idusuario = $v{idUsuario} 
+	sql_var(empresascolaborador);
+
+	set filtroempresa = ' and ft.idempresa in ($c{idempresascolaborador})';	
+end_if;	
+
+
+#sql select * from wfatividade where idwfatividade = $v{idwfatividade} sql_var(sql_wfatividade);
+
+sql 
+Select x.descricao as opcaoselecionada
+From ($v{sql_idwfatividade}) x
+Where x.idwfatividade = '$v{idempresa}.$v{idwfatividade}'
+;
+
+sql 
+Select 
+	a.idwfatividade
+	,a.descricao||' E:'||cast(coalesce($v{idempresa},0) as varchar(100)) as descricao, a.situacao, a.idwfprocesso, a.dataalteracao, a.idusuarioalteracao, a.prioridade, a.tempoexpiracao, a.tipotempoexpiracao, a.idwfatividaderealizadaexpiracao, a.ignoraempresawfatividadecolaborador
+From 
+	wfatividade a
+Where 
+	a.idwfatividade = $v{idwfatividade} 
+sql_var(sql_wfatividade);
+
+sql 
+Select
+	x.*
+	,coalesce((x.qtdestoqueatual * x.valorcustoaquisicao), 0.) valestoqueparado
+	,row_number() over() -1 as index
+From (
+	Select
+		cast(ft.idwffilatrabalho as varchar(255)) recid
+		,o.idwfocorrencia
+		,o.idempresa
+		,coalesce(e.apelido,e.nomefantasia) as empresa
+		,ft.idwffilatrabalho
+		,to_char(ft.datainclusao ,'yyyy-mm-dd')||' '||ft.horainclusao as datainclusao
+		,to_char((o.valores->>'datavencimento')::date ,'yyyy-mm-dd') as datavencimento
+		,to_char((o.valores->>'dataprevisaosaida')::date ,'yyyy-mm-dd') as dataprevisaosaida	
+		,(Case (o.valores->>'classificacao')::bigint
+			when 0 then 'Baixo Risco'
+			when 1 then 'Medio Risco'
+			when 2 then 'Alto Risco'
+			else ''
+		end) as classificacao			
+		,ft.horainclusao
+		,ft.idwfatividaderealizada
+		,coalesce((Select ft2.observacao From wffilatrabalho ft2 Where ft2.idwffilatrabalho = ft.idwffilatrabalhoanterior), '') as observacao
+		,p.codigobarras
+		,p.idproduto
+		,p.descricao produto
+		,cp.classe
+		,f.idfamilia
+		,f.descricao familia
+		,g.idgrupo
+		,g.descricao grupo
+		,s.idsetor
+		,s.descricao setor
+		,d.iddepartamento
+		,d.descricao departamento
+		,ppc.valorprecovenda
+		,(current_date-1) - pr.dataultimavenda diassemvenda
+		,(current_date-1) - pr.dataultimaentrada diasentrada
+		,to_char(pr.dataultimaentrada, 'yyyy-mm-dd') as dataultimaentrada
+		,to_char(pr.dataultimavenda, 'yyyy-mm-dd') as dataultimavenda
+		,pr.qtdeultimaentrada qtdultimaentrada
+		,pr.qtdeultimavenda qtdeultimavenda
+		,ppc.valorcustoaquisicao
+		,(o.valores->>'qtdeabastecimento') as qtdeabastecimento
+		,(o.valores->>'ruptura') as qtdeabastecer
+		,coalesce((Select sum(esa.quantidade) From 	estoquesaldoatual esa 
+		                                            inner join estoquelocal ecl on (ecl.idlocalestoque = esa.idlocalestoque)
+		                                      Where esa.idproduto = p.idproduto and esa.idempresa = o.idempresa 
+		                                            and ecl.localvenda = 'S'
+		                                            $v{filtroLocalEstoque}), (o.valores->>'estoquequantidade')::numeric) as qtdestoqueatual
+		,(	Select
+				p.razaosocial
+			From
+				produtofornecedor pf
+				inner join pessoa p on p.idpessoa = pf.idpessoa
+			Where
+				pf.idproduto = (o.chaves->>'idproduto')::bigint
+				and p.situacao = 'A'
+				and p.fornecedor = 'T'
+			limit 1
+		) as fornecedor
+		,pg.girodiareal as qtdvendamedia
+		,(	Select	sum(ea.quantidade)
+			From	estoquesaldoatual ea
+			Where	ea.idempresa in ($v{idempresaCD#0})
+					and ea.idproduto = p.idproduto
+		) as qtdestoqueatualcd
+		,p.qtdunentrada
+		,(	Select	count(distinct o2.idwfocorrencia)
+			From	wfocorrencia o2
+			Where	o2.idwfprocessoevento = o.idwfprocessoevento
+					and o2.idempresa = o.idempresa
+					and (o2.chaves->>'idproduto')::bigint = (o.chaves->>'idproduto')::bigint
+					and o2.datainclusao >= current_date-120
+		) as recorrencia120dias
+	From
+		wffilatrabalho ft 
+		inner join wfocorrencia o on o.idwfocorrencia = ft.idwfocorrencia
+		inner join empresa e on (e.idempresa = o.idempresa)
+		inner join produto p on p.idproduto = (o.chaves->>'idproduto')::bigint
+		left join produtogiro pg on pg.idproduto = p.idproduto and pg.idempresa = o.idempresa and pg.dias = 90 and pg.tipogiro = 'V'
+		left join produtoprecocusto ppc on ppc.idproduto = p.idproduto and ppc.idempresa = o.idempresa
+		left join produtoresumo pr on pr.idproduto = p.idproduto and pr.idempresa = o.idempresa
+		left join familia f on f.idfamilia = p.idfamilia
+		left join grupo g on g.idgrupo = p.idgrupo
+		left join setor s on s.idsetor = p.idsetor
+		left join departamento d on d.iddepartamento = p.iddepartamento
+		left join classeproduto cp on
+			cp.idempresa = o.idempresa
+			and cp.idproduto = p.idproduto
+			and cp.idmercadologico = '0' /* #! 0 = Geral, Não é separado por mercadológico */
+			and cp.tipoanalise = 'G' /* #! Classificação do produto por quantidade de saída */
+	Where
+		(ft.idusuarioresponsavel = $v{idUsuario} or $v{idUsuario} = 2)
+		and ft.idwfatividaderealizada is null
+		and o.idwffilatrabalhofinalizacao is null
+		and ft.idwfatividade = $v{idwfatividade}
+		$v{filtroempresa}  --  and ft.idempresa = $v{idempresa}
+		and ft.expirada = 'N'
+		and o.expirada = 'N'
+		--and o.apelidotarefaencaminhamento = '$v{apelidotarefaencaminhamento}'
+	) x
+	limit 10000
+sql_var(sql_filadetrabalho);
+
+sql select
+	ar.idwfatividaderealizada "id",
+	ar.descricao||coalesce(' -> '||a.descricao, '') "text",
+	ar.idwfatividaderealizada as idwfatividaderealizada,
+	ar.descricao||coalesce(' -> '||a.descricao, '') as atividaderealizada
+from
+	wfatividaderealizada ar
+	left join wfatividade a on (a.idwfatividade = ar.idwfatividadeproxima)
+where
+	ar.idwfatividade = $v{idwfatividade} 
+sql_var(sql_idwfatividaderealizada);
+
+set iddepartamento = '$c{iddepartamento:list#}'.trim().equals('') ? '-1' : '$c{iddepartamento:list#}';
+
+sql select 
+		iddepartamento "id", 
+		descricao "text",
+		iddepartamento, 
+		descricao departamento
+from 	departamento 
+where 	iddepartamento in ($v{iddepartamento}) 
+Union all
+select 
+		0 "id", 
+		'Todos Departamentos' "text",
+		0, 
+		'Todos Departamentos' departamento
+Order by
+	1 asc
+sql_var(sql_iddepartamento);
+
+
+
+set idsetor = '$c{idsetor:list#}'.trim().equals('') ? '-1' : '$c{idsetor:list#}';
+
+sql 
+Select 
+	Setor.idsetor "id"
+	,Setor.descricao "text"
+	,Setor.idsetor
+	,Setor.descricao setor
+From 
+	Setor 
+Where 
+	Setor.idsetor in ($v{idsetor})
+Union all
+select 
+		0 "id", 
+		'Todos os Setores' "text",
+		0, 
+		'Todos os Setores' departamento
+Order by
+	1 asc
+sql_var(sql_idsetor);
+
+
+<script_function name="update">
+	$include{HEAVEN-script-sql-busca-config-tarefa, "'HEAVEN-wf-ruptura-marcacao-wfatividaderealizada-wffilatrabalho-mercadologico-mobile'"}include
+	set apelidotarefaencaminhamento = '$c{HEAVEN-cfg-apelidotarefaencaminhamento#}'.equals('') ? 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico' : '$c{HEAVEN-cfg-apelidotarefaencaminhamento#}';
+
+	set msg1 = 'Salvo com sucesso.';
+	set msg2 = 'Erro ao salvar.';
+	
+	connect $v{ds_bridge};
+	begin_transaction ;
+		run_script_java_groovy update;
+		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
+			rollback;
+			stop_if true;
+		end_if;
+	commit ;
+
+	<script_java_groovy name="update">
+		import groovy.json.JsonSlurper;
+		import bdo.util.SQLUtilX;
+
+		def objArray = new JsonSlurper().parseText(execScript.getValueVar('wffilatrabalho'));
+		
+		String execId = execScript.getValueVar('execId');
+		String dataAtual = execScript.getValueVar('dataAtual');
+		String horaAtual = execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
+
+		String msg1 = execScript.getValueVar('msg1');
+		String msg2 = execScript.getValueVar('msg2');
+		
+		SQLUtilX sqlUtilX = new SQLUtilX('wffilatrabalho', 'idwfatividaderealizada, observacao, idtarefaexecucaoatividaderealizada, dataatividaderealizada, horaatividaderealizada', 'idwffilatrabalho');
+		sqlUtilX.setConnectionX(execScript.getConnection());
+
+		sqlUtilX.setInt(null)
+				.setString(null)
+				.setInt(execId)
+				.setDate(dataAtual)
+				.setString(horaAtual);
+				
+		String response = '';
+		String idWFFilatrabalho = '0';
+		String idWFOcorrencia = '-1';
+
+		for (obj in objArray) {
+			if (obj.idwfatividaderealizada) {
+				idWFFilatrabalho += ',' + obj.idwffilatrabalho;
+				idWFOcorrencia += ',' + obj.idwfocorrencia;
+
+				sqlUtilX.setIndex(-1)
+					.setIndexPK(-1)
+					.setInt(obj.idwfatividaderealizada)
+					.setString(obj.observacao)
+					.setIntPK(obj.idwffilatrabalho);
+					
+				response = sqlUtilX.update(msg1, msg2);
+			}
+
+			if (response.contains(msg2)) {
+				break;
+			}
+		}
+
+		execScript.addVar('response', response);
+		execScript.addVar('idWFFilatrabalho', idWFFilatrabalho);
+		execScript.addVar('idWFOcorrencia', idWFOcorrencia);
+
+		return true;
+	</script_java_groovy>
+
+	if '$v{idWFFilatrabalho#0}'.equals('0');
+		set response = '{ "msg": "", "error": "" }';
+		stop_if true;
+	end_if;
+
+	# Finaliza as ocorrências
+	$include{script:HEAVEN-wf-finaliza-wfocorrencia-include}include
+
+	# Gera fila trabalho
+	$include{
+		script:HEAVEN-wf-gera-wffilatrabalho-sequencia-include, 
+		"execScript.getValueVar('apelidotarefaencaminhamento')"
+	}include
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> sb.append('$v{response}');
+</script_function>
+
+<script_function name="export">
+	set wffilatrabalho = execScript.getValueVar('wffilatrabalho').replace("'", "");
+	
+	connect $v{ds_bridge};
+	sql 
+	Select 
+		(value->>'iddepartamento') as iddepartamento
+		,(value->>'departamento') as departamento
+		,(value->>'idsetor') as idsetor
+		,(value->>'setor') as setor
+		,(value->>'idgrupo') as idgrupo
+		,(value->>'grupo') as grupo
+		,(value->>'idfamilia') as idfamilia
+		,(value->>'familia') as familia
+		,(value->>'classe') as classe
+		,(value->>'idproduto') as idproduto
+		,(value->>'produto') as produto
+		,(value->>'codigobarras') as codigobarras
+		,(value->>'qtdunentrada') as qtdunentrada
+		,(value->>'valorprecovenda')::numeric as valorprecovenda
+		,(value->>'dataultimavenda')::date as dataultimavenda
+		,(value->>'diassemvenda')::numeric as diassemvenda
+		,(value->>'dataultimaentrada')::date as dataultimaentrada
+		,(value->>'diasentrada')::numeric as diasentrada
+		,(value->>'qtdultimaentrada')::numeric as qtdultimaentrada
+		,(value->>'valestoqueparado')::numeric as valestoqueparado
+		,(value->>'valorcustoaquisicao')::numeric as valorcustoaquisicao
+		,(value->>'qtdestoqueatual')::numeric as qtdestoqueatual
+		,(value->>'observacao') as observacao
+		,(value->>'datavencimento') as datavencimento
+		,(value->>'empresa') as empresa
+		,row_number() over() % 2 rn
+	From 
+		json_array_elements('$v{wffilatrabalho}')
+	sql_var(sql);
+	xlsx
+		<name>filatrabalho</name>
+		<template>HEAVEN-wf-ruptura-marcacao-wfatividaderealizada-wffilatrabalho_vs_2.xlsx</template>
+		<sqlvars>
+			<sqlvar>sql</sqlvar>
+		</sqlvars>
+	;
+	<!--output-->
+	<a href="$xlsx{filatrabalho}"></a>
+</script_function>
+
+# Forçar atualização por módulos
+stop_if true;
+xlsx <template>HEAVEN-wf-ruptura-marcacao-wfatividaderealizada-wffilatrabalho.xlsx</template>;
+xlsx <template>HEAVEN-wf-ruptura-marcacao-wfatividaderealizada-wffilatrabalho_vs_2.xlsx</template>;

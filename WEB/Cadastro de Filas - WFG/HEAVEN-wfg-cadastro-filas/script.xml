@@ -1,0 +1,400 @@
+# versao 1.0
+#
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição
+# | 27/04/2026 | Bernardo    | IANDev      |             | Criação da estrutura inicial do cadastro WEB de filas WFG.
+
+// Auxiliares: getProcessos, getEmpresas, getMercadologicos
+$include{script:HEAVEN-wfg-cadastro-filas-parte2}include
+
+<script_function name="getList">
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('getList - $v{usuario}');
+
+	set filtroId = '$v{id#}'.equals('') ? '' : ' and t.idtarefa = $v{id}';
+	set filtroDescricao = '$v{descricao#}'.equals('') ? '' : " and upper(t.descricao) like upper('%$v{descricao}%')";
+	set filtroSituacao = '$v{situacao#}'.equals('') ? '' : " and coalesce(t.situacao = '$v{situacao}'";
+
+	set sort = "order by $v{order#1}";
+	set sort = '$v{sort}'.replace('null', '1');
+	set offset = ($v{pageIndex#1}-1) * $v{pageSize#20};
+
+	connect $v{datasource2};
+
+	sql 
+	Select 
+		t.apelido
+		,t.desctarefa as descricao
+		,t.idtarefa
+		,Case when t.situacao = 0 then 'A' else 'I' end as situacao
+		,t.apelido, t.tipodias, t.diassemana, t.dias, t.meses, t.anos, t.datas, t.tipohorarios, t.tipointervalo, t.intervalo, t.horainicial, t.horafinal, t.horarios
+		,t.scriptAcao
+	From 
+		Tarefa t
+	Where
+		t.apelido like 'CLIENTE-wfg-%-execucao'
+	sql_var(sqlMemoriaTarefas) no_exec;
+
+	connect $v{ds_bridge};
+
+	#####################
+	# Uso padrão de arquivo temporário Postgres
+	#####################
+	set sufixo = "$v{idTarefa}_$v{execId}";
+	set tabletmp = "temp_$v{sufixo}";
+
+	sql_exec create temporary table $v{tabletmp} (
+		apelido varchar(256) not null
+		,descricao varchar(256) not null
+		,idtarefa integer not null
+		,situacao varchar(1) not null
+		,tipodias integer not null
+		,diassemana varchar(7) not null
+		,dias varchar(31) not null
+		,meses varchar(13) not null
+		,anos varchar(21) not null
+		,datas varchar(31) not null
+		,tipohorarios integer not null
+		,tipointervalo integer not null
+		,intervalo integer not null
+		,horainicial varchar(8) not null
+		,horafinal varchar(8) not null
+		,horarios varchar(64000) not null
+		,scriptAcao varchar(256) not null
+	);
+
+	sql_insert_by_column_names sqlMemoriaTarefas into $v{tabletmp} (APELIDO, DESCRICAO, IDTAREFA, SITUACAO, TIPODIAS, DIASSEMANA, DIAS, MESES, ANOS, DATAS, TIPOHORARIOS, TIPOINTERVALO, INTERVALO, HORAINICIAL, HORAFINAL, HORARIOS, SCRIPTACAO);
+
+	sql
+	Select
+		t.idtarefa as id
+		,t.apelido as apelido
+		,t.descricao as descricao
+		,t.situacao as situacao
+		,t.tipodias as "tipoDias"
+		,t.diassemana as "diasSemana"
+		,t.dias as dias
+		,t.meses as meses
+		,t.anos as anos
+		,t.datas as datas
+		,t.tipohorarios as "tipoHorarios"
+		,t.tipointervalo as "tipoIntervalo"
+		,t.intervalo as intervalo
+		,t.horainicial as "horaInicial"
+		,t.horafinal as "horaFinal"
+		,t.horarios as horarios
+		,t.scriptAcao as "scriptAcao"
+		,cast(coalesce(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcesso_idWFProcesso', '') as integer) as idwfprocesso
+		,coalesce(p.descricao, '') as wfprocessodescricao
+		,cast(coalesce(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento', '') as integer) as idwfprocessoevento
+		,coalesce(pe.descricao, '') as wfprocessoeventodescricao
+		,coalesce(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento', '') as apelidotarefaencaminhamento
+		,coalesce(nullif(ctFlow.valor::jsonb->>'flowjson', ''), ctFlow.valor, '') as flowjson
+		,coalesce(ctFlow.valor::jsonb->>'nodefiltersjson', '{}') as nodefiltersjson
+	From
+		$v{tabletmp} t
+		left join configtarefa ct on (ct.apelidotarefa = t.apelido and ct.chave = 'CLIENTE-wfg-cfg')
+		left join configtarefa ctFlow on (ctFlow.apelidotarefa = t.apelido and ctFlow.chave = 'CLIENTE-wfg-cfg-drawFlow')
+		left join wfprocesso p on (p.idwfprocesso = nullif(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcesso_idWFProcesso', '')::integer)
+		left join wfprocessoevento pe on (pe.idwfprocessoevento = nullif(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento', '')::integer)
+	sql_var(sql_base) no_exec;
+
+	sql
+	Select
+		*
+	From
+		($v{sql_base}) x
+	$v{sort}
+	sql_var(sql) sql_props(limit="$v{pageSize#20}" offset="$v{offset}")
+	;
+
+	sql
+	Select
+		count(*) as total
+	From
+		($v{sql_base}) x
+	;
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> msgBuilder.setHeader('total', '$c{total}');
+	$> sb.append('{ "total": $c{total}, "list": [').append(msgBuilder.sqlVarToJSON('sql')).append('] }');
+</script_function>
+
+<script_function name="save">
+	not_save_exec;
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('save - $v{usuario}');
+
+	connect $v{ds_bridge};
+
+	run_script_java_groovy save -> var: response;
+
+	<script_java_groovy name="save">
+		import java.util.List;
+		import java.util.ArrayList;
+		import javax.persistence.EntityManager;
+		import groovy.json.JsonSlurper;
+		import bdo.dao.TarefaDAO;
+		import bdo.dao.ProcessoDAO;
+		import bdo.dao.SubprocessoDAO;
+		import bdo.entity.Tarefa;
+		import bdo.entity.Processo;
+		import bdo.entity.Subprocesso;
+		import bdo.util.SQLUtilX;
+		import com.elisha.commons.util.StringUtil;
+		import com.elisha.commons.util.ArrayUtil;
+		import groovy.sql.Sql;
+		import java.sql.Connection;
+		
+		String dataAtual	= execScript.getValueVar('dataAtual');
+		String horaAtual	= execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
+		int idUsuario		= Integer.parseInt(execScript.getValueVar('idUsuario'));
+
+		String msg1 = 'Categoria gravada com sucesso.';
+		String msg2 = 'Erro ao gravar categoria.';
+
+		Connection con = execScript.getConnection(execScript.getValueVar("ds_bridge"));
+		Connection conDS2 = execScript.getConnection(execScript.getValueVar("datasource2"));
+		
+        SQLUtilX sqlUtilXCONFIG = new SQLUtilX('configtarefa', 'descricao, valor, dataalteracao, idusuarioalteracao', 'apelidotarefa, chave')
+								   .setConnectionX(con);
+
+		def model = new JsonSlurper().parseText(execScript.getValueVar("model"));
+		String action = execScript.getValueVar("_action");
+
+		String response;
+
+		EntityManager em = execScript.getEntityManager();
+		
+		try {
+
+			//# Cria a tarefa de execução
+			em.getTransaction().begin();
+
+			TarefaDAO dao = new TarefaDAO(em);
+			ProcessoDAO pDAO = new ProcessoDAO(em);
+			SubprocessoDAO spDAO = new SubprocessoDAO(em);
+
+			Processo processo = pDAO.findById(1034, false);
+			Subprocesso subprocesso = spDAO.findById(1007, false);
+
+			Tarefa e = (action.equals("update") ? dao.findById(model.id, true) : new Tarefa(model.id));
+
+			e.setDescTarefa(model.descricao)
+			e.setSituacao(model.situacao == 'A' ? Tarefa.SITUACAO_ATIVA : Tarefa.SITUACAO_INATIVA);
+			
+			e.setTipoDias(model.tipoDias);
+			e.setDiasSemana(model.diasSemana);
+			e.setDias(model.dias);
+			e.setMeses(model.meses);
+			e.setAnos(model.anos);
+			e.setDatas(model.datas);
+			e.setTipoHorarios(model.tipoHorarios);
+			e.setTipoIntervalo(model.tipoIntervalo);
+			e.setIntervalo(model.intervalo);
+			e.setHoraInicial(model.horaInicial);
+			e.setHoraFinal(model.horaFinal);
+			e.setHorarios(model.horarios);
+			e.setScriptAcao(model.scriptAcao);
+			e.setUsuarioAlt(execScript.getExecContext().getUsuario());
+			e.getTarefaMsgHtml();
+			e.getTarefaMsgTexto();
+			
+			e.setProcesso(processo);
+			e.setSubprocesso(subprocesso);
+
+			if (action.equals("insert")) {
+				e.setScript('$' + 'include{script:HEAVEN-wfg-execucao}include');
+				e.setCondicaoNotificacao('true');
+			}
+
+	        dao.beforeSave(e);
+	       	
+			model.id = e.getIdTarefa();
+			e.setApelido("CLIENTE-wfg-${model.id}-execucao");
+	       
+		    Tarefa e2 = dao.save(e);
+	        em.getTransaction().commit();
+
+			String cfg = """{ "CLIENTE-wfg-cfg-WFProcesso_idWFProcesso": ${model.idwfprocesso}, "CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento": ${model.idwfprocessoevento}, "CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento": "HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico" } """;
+			
+			//# Cria a tarefa de execução
+			response = sqlUtilXCONFIG
+					.setString("CFG Processo, Evento e Encaminhamento")
+					.setString(cfg)
+					.setDate(dataAtual)
+					.setInt(idUsuario)
+					.setStringPK("CLIENTE-wfg-${model.id}-execucao")
+					.setStringPK("CLIENTE-wfg-cfg")
+					.insertOrUpdate("CFG 'CLIENTE-wfg-cfg' gravado com sucesso", "Erro ao gravar cfg 'CLIENTE-wfg-cfg'");
+
+			response = SQLUtilX.toJSON(1, action, "Tarefa ${model.id} gravada com sucesso.", "");
+			
+			def entity = """{ "id": "$model.id"}""";
+			
+			response = SQLUtilX.setEntityToJSON(response, entity);
+
+			execScript.debug("@@@@@@@@ 1 ${response}");
+
+			execScript.addVar('response', response);
+			return response;
+        } catch (Exception ex) {
+        	if (em.getTransaction().isActive()) {
+        		em.getTransaction().rollback();
+        	}
+			execScript.debug("@@@@@@@@ 2 ${ex.getMessage()}");
+			return SQLUtilX.toJSON(1, action, "Erro ao gravar Fila.", ""+ex.getMessage());
+        }
+	</script_java_groovy>
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append(execScript.getValueVar('response#'));
+</script_function>
+
+<script_function name="saveFlow">
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('saveFlow - $v{usuario}');
+
+	connect $v{ds_bridge};
+	
+	set msg1 = "Fluxo salvo com sucesso";
+	set msg2 = "Não foi possível salvar o fluxo";
+
+#	sql_exec CREATE SEQUENCE if not exists public.seq_idwfgtarefa;
+#	sql_exec create table if not exists WfgTarefa (
+#        idWfgTarefa INTEGER NOT NULL DEFAULT nextval('public.seq_idwfgtarefa'),
+#        apelidoTarefa VARCHAR(256) NOT NULL,
+#        apelidoTarefaMae VARCHAR(256) NOT NULL,
+#        ordemExecucao INTEGER NOT NULL,
+#        dataAlteracao DATE NOT NULL,
+#        horaAlteracao VARCHAR(8) NOT NULL,
+#        idUsuarioAlteracao INTEGER,
+#        jsonbParametros VARCHAR(12345) NOT NULL,
+#        CONSTRAINT wfgtarefa_pk PRIMARY KEY (idWfgTarefa )
+#	);
+#	sql_exec ALTER TABLE WfgTarefa alter column jsonbParametros type jsonb using jsonbParametros::jsonb;
+#	sql_exec  ALTER SEQUENCE public.seq_idwfgtarefa OWNED BY public.WfgTarefa.idWfgTarefa;
+
+	begin_transaction;
+		run_script_java_groovy saveFlow;
+		
+		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
+			rollback;
+			stop_if true;
+		end_if;
+	commit;
+
+	<script_java_groovy name="saveFlow">
+		import groovy.json.JsonOutput;
+		import groovy.json.JsonSlurper;
+		import groovy.sql.Sql;
+		import java.sql.Connection;
+		import org.postgresql.util.PGobject;
+		import bdo.util.SQLUtilX;
+
+		String id = execScript.getValueVar("id");
+		if (id == null || id.trim().isEmpty()) {
+			execScript.addVar("response", SQLUtilX.toJSON(1, "saveFlow", execScript.getValueVar("msg2"), "ID da fila não informado."));
+			return;
+		}
+
+		String flowJson = execScript.getValueVar("flow");
+		String wfgNodesJson = execScript.getValueVar("wfgNodesJson");
+		String nodefiltersJson = execScript.getValueVar("nodefiltersJson");
+		
+		String dataAtual	= execScript.getValueVar('dataAtual');
+		String horaAtual	= execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
+		int idUsuario		= Integer.parseInt(execScript.getValueVar('idUsuario'));
+
+		if (flowJson == null || flowJson.trim().isEmpty()) {
+			flowJson = "{}";
+		}
+		if (wfgNodesJson == null || wfgNodesJson.trim().isEmpty()) {
+			wfgNodesJson = "[]";
+		}
+		if (nodefiltersJson == null || nodefiltersJson.trim().isEmpty()) {
+			nodefiltersJson = "{}";
+		}
+
+		String apelidoTarefaMae = "CLIENTE-wfg-${id}-execucao";
+
+		def con = execScript.getConnection();
+		Sql sql = new Sql(con);
+
+		SQLUtilX sqlUtilXCONFIG = new SQLUtilX("configtarefa", "descricao, valor, dataalteracao, idusuarioalteracao", "apelidotarefa, chave")
+			.setConnectionX(con);
+		SQLUtilX sqlUtilXWfgTarefa = new SQLUtilX(
+			"WfgTarefa",
+			"apelidoTarefa, apelidoTarefaMae, ordemExecucao, dataAlteracao, horaAlteracao, idUsuarioAlteracao, jsonbParametros",
+			"idWfgTarefa"
+		).setConnectionX(con);
+
+		def payloadCfg = [
+			flowjson: flowJson,
+			nodefiltersjson: nodefiltersJson
+		];
+		String valorCfg = JsonOutput.toJson(payloadCfg);
+
+		sqlUtilXCONFIG
+			.setString("CFG Drawflow WFG")
+			.setString(valorCfg)
+			.setDate(dataAtual)
+			.setInt(idUsuario)
+			.setStringPK(apelidoTarefaMae)
+			.setStringPK("CLIENTE-wfg-cfg-drawFlow")
+			.insertOrUpdate("CFG drawFlow gravada com sucesso.", "Erro ao gravar cfg drawFlow.");
+
+		sql.execute("delete from WfgTarefa where apelidoTarefaMae = ?", [apelidoTarefaMae]);
+
+		def parsedNodes = new JsonSlurper().parseText(wfgNodesJson);
+		List nodes = (parsedNodes instanceof List ? parsedNodes : []);
+		int ordem = 1;
+		nodes.each { node ->
+			if (node instanceof Map) {
+				String apelidoTarefa = (node.apelidoTarefa ?: "").toString();
+				if (!apelidoTarefa.trim().isEmpty()) {
+					int ordemExecucao = (node.ordemExecucao instanceof Number ? ((Number) node.ordemExecucao).intValue() : ordem);
+					def jsonbParametros = [
+						drawflowNodeId: (node.drawflowNodeId ?: "").toString(),
+						nome: (node.nome ?: "").toString(),
+						filters: (node.filters instanceof List ? node.filters : [])
+					];
+					PGobject jsonbParametrosObj = new PGobject();
+					jsonbParametrosObj.setType("jsonb");
+					jsonbParametrosObj.setValue(JsonOutput.toJson(jsonbParametros));
+
+					String nodeResponse = sqlUtilXWfgTarefa
+						.setNotInsertPKX(true)
+						.setIndex(-1)
+						.setIndexPK(-1)
+						.setString(apelidoTarefa)
+						.setString(apelidoTarefaMae)
+						.setInt(ordemExecucao)
+						.setDate(dataAtual)
+						.setString(horaAtual)
+						.setInt(idUsuario)
+						.setObject(jsonbParametrosObj)
+						.setIntPK(-1)
+						.insertOrUpdate("Tarefa WFG salva com sucesso.", "Erro ao salvar tarefa WFG.");
+					if (nodeResponse.contains("Erro ao salvar tarefa WFG.")) {
+						throw new RuntimeException(nodeResponse);
+					}
+					
+					ordem++;
+				}
+			}
+		}
+
+		execScript.addVar("response", SQLUtilX.toJSON(1, "saveFlow", execScript.getValueVar("msg1"), ""));
+	</script_java_groovy>
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append(execScript.getValueVar('response#'));
+</script_function>

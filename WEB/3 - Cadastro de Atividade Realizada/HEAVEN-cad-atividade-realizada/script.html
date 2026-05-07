@@ -1,0 +1,331 @@
+$> msgBuilder.setHtmlTemplates('w2ui01.html', 'w2ui01-odw2.html');
+$> msgBuilder.setContentSections('head', 'body');
+$> msgBuilder.setReplaceVarsOnTemplate(true);
+	<link type="text/css" rel="stylesheet" href="js/mermaid-1.3/mermaid.css"/>	
+	<script type="text/javascript" src="js/mermaid-1.3/mermaidAPI.min.js"></script>
+	<script type="text/javascript" src="https://ariutta.github.io/svg-pan-zoom/dist/svg-pan-zoom.js"></script>
+	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.1.1/cytoscape.js"></script>
+	
+	<style type="text/css">
+		.container1 {
+			width: 1100px;
+		}
+
+		.input-label{
+			text-align: right;
+			font-weight: bold;
+		}
+
+		.w2ui-overlay.w2ui-overlay-popup {
+		    z-index: 9999999;
+		}
+
+		select, input {
+			width: 100%;
+		}
+
+		#graph {
+			height: 1000px;
+			width: 100%;
+			margin: 60px 0;
+		}
+		#graph .cytoscape {
+			height: 100%;
+			border: #848484 1px solid;
+		}
+		
+	</style>
+
+	<script type="text/javascript">
+		function getLabel(record, col, labels) {
+			for (var i in labels) {
+				if (labels[i][col] == record[col]) {
+					return labels[i][Object.keys(labels[i])[1]];
+				}
+			}
+			return "";
+		}
+
+		function printCanvas(canvas, cy, args) {  
+			args = args || {};
+		    var content = [ "<!DOCTYPE html>",
+    						"<html>",
+	    						"<head><title>", args.title || "" ,"</title></head>",
+    							"<body><img height=", canvas.height, " width=", canvas.width, " src=\'", cy.png() , "\'></img></body>",
+							"</html>"].join("");
+							
+		    var printWin = window.open("", "", "width=600,height=520");
+
+			if(!printWin) {
+				alert("Erro! Verifique se as pop-ups estão habilitadas no seu navegador!");
+				return;
+			}
+
+		    printWin.document.open();
+		    
+		    printWin.document.write(content);
+		    //printWin.document.close();
+
+			printWin.onload = function() { 
+			    printWin.focus();
+			    printWin.print();
+			   // printWin.close();
+			};
+
+		}
+
+		
+		$(document).ready(function() {
+			
+//			window.mermaidAPI && window.mermaidAPI.initialize({
+//	            startOnLoad: false,
+//	            flowchart: {
+//	            	useMaxWidth: false,
+//					htmlLabels: true
+//	            }
+//	        });
+
+			$> sb.append('var tiposituacao = [' + msgBuilder.sqlVarToJSON('sql_tiposituacao') + '];\n');
+
+			setOdwW2UIGridOptions({	idTarefaCRUD: ~~~, -> $c{IDTAREFACRUD};
+								    idInput: "#idwfatividaderealizada", firstFocusInput: "#descricao",
+									msgDelete: "Confirma a exclusão da Atividade {id} ?",
+									w2uiFolder: "w2ui-1.4.2" });
+			configOdwForm();
+
+			$("#w2uiGrid").w2grid({ 
+				name: "w2uiGrid", 
+				url: "odwctrl?action=execTarefa&idTarefa=~~~&ajax=true", -> $c{IDTAREFACRUD};
+				postData: {_action: "list", idwfprocesso: "~~~"}, -> $v{idwfprocesso};
+				header: "Atividade Realizada",
+			    show: { header: true, toolbar: true, footer: true },
+				multiSearch: false,
+				reorderColumns: true,
+				columns: [
+					{ field: "idwfatividaderealizada", caption: "Cód.", size: "5%", sortable: true, searchable: false },
+					{ field: "wfprocesso", caption: "Processo", size: "10%", sortable: true, searchable: true },
+					{ field: "wfatividade", caption: "Atividade", size: "10%", sortable: true, searchable: true },
+					{ field: "descricao", caption: "Atividade Realizada", size: "10%", sortable: true, searchable: true },
+					{ field: "wfatividadeproxima", caption: "Próxima Atividade", size: "10%", sortable: true, searchable: true },
+					{ field: "wfcausa", caption: "Causa", size: "10%", sortable: true, searchable: true },
+					{ field: "wfimpacto", caption: "Impacto", size: "10%", sortable: true, searchable: true },
+					{ field: "areaempresa", caption: "Área Empresa", size: "10%", sortable: true, searchable: true },
+					{ field: "tiposituacao", caption: "Tipo", size: "7%", sortable: true, searchable: false, render: function (record){ return getLabel(record, "tiposituacao", tiposituacao)} }
+				],
+				onClick: function(event) {
+					var record = this.get(event.recid);
+					displayData(record);
+				},
+				onLoad: function() {
+					$.ajax({
+						dataType: "text",
+						url: w2ui.w2uiGrid.url,
+						data: { _action: "flowdata", idwfprocesso: "~~~"}, -> $v{idwfprocesso};
+						success: function(graphDefinition) {					
+//							var $graph = $("<svg>", { id: "graph-" + new Date().getTime() })
+//								.appendTo($("#graph").html(""));
+
+							var $graph = $("#graph");
+
+							graphDefinition = JSON.parse(graphDefinition);
+
+							var cy = cytoscape({
+								container: $graph.find(".cytoscape").get(0),
+								
+								boxSelectionEnabled: false,
+								autounselectify: true,
+
+								style: cytoscape.stylesheet()
+									    .selector("node")
+									    .css({
+									    	"content": "data(content)",
+									    	"shape": "data(shape)",
+									    	"background-color": "data(background)",									    	
+									    	"text-wrap": "wrap",
+											"text-max-width": 160
+									    })
+									    .selector("edge")
+										.css({
+											"label": "data(label)",
+											"curve-style": "bezier",
+											"target-arrow-shape": "triangle",
+											"source-arrow-shape": "circle",
+											"text-background-opacity": 1,
+											"text-background-color": "#fff",
+											"text-background-shape": "roundrectangle",
+											"text-border-color": "#000",
+											"text-border-width": 1,
+											"text-border-opacity": 0,
+											"text-margin-x": "3px",
+											"text-margin-y": "3px",
+											"text-valign": "top",
+											"edge-text-rotation": "autorotate"
+
+										})
+										.selector("edge.alert")
+										.css({
+											"line-style": "dotted",
+											"line-color": "red",
+											"source-arrow-shape": "diamond"
+										}),
+								elements: {
+								  nodes: graphDefinition.nodes,
+								  edges: graphDefinition.edges
+								},
+								layout: {
+									name: "breadthfirst",
+									directed: true,
+									roots: "#" + graphDefinition.root.data.id,
+									padding: 10
+								}
+							});
+
+	
+							var bfs = cy.elements().bfs(graphDefinition.root.data.id , function(){}, true);
+
+							$graph.find(".title").html("Complexidade Ciclomática: " + (graphDefinition.edges.length - graphDefinition.nodes.length + 2));
+							$graph.find(".print")
+									.html("Imprimir Diagrama")
+									.unbind("click")
+									.click(function () {
+										printCanvas($graph.find("canvas").get(0), cy, { title: "Imprimir Diagrama" });
+									});
+
+
+//							window.mermaidAPI && window.mermaidAPI.render("mermaid-" + $graph.attr("id"), graphDefinition, function(svgCode, bindFunctions) {
+//								var $svg = $(svgCode);
+//									$graph.html($svg);
+//
+//									window.svgPanZoom && window.svgPanZoom($svg.get(0), { 
+//										zoomEnabled: true,
+//										controlIconsEnabled: true,
+//										fit: true,
+//										center: false,
+//										minZoom: 0.1,
+//										customEventsHandler: {
+//											init: function(options) {
+//												$graph.find("#svg-pan-zoom-controls").attr("transform", "translate(10, 10) scale(0.90)");
+//											}
+//										}
+//									});
+//
+//							});
+
+						}
+					});
+				},
+				onToolbar: function(event) {
+					var id = event.target;
+					if (id == "btnAdd") {
+						actionInsert();
+					} else if (id == "btnCopy") {
+						actionCopy();
+					} else if (id == "btnDelete") {
+						actionDelete(w2ui.w2uiGrid.getSelection());
+					}
+				}
+			});
+			w2ui.w2uiGrid.toolbar.add([{ type: "button", id: "btnAdd", caption: "Incluir", img: "w2ui-icon-plus" },
+									   { type: "button", id: "btnCopy", caption: "Copiar", img: "w2ui-icon-plus" },
+									   { type: "button", id: "btnDelete", caption: "Excluir", img: "w2ui-icon-cross" }]);
+
+			clearData = function() {
+			    $("#_id").val("");
+			    clearValues();
+			    $(odwW2UIGridOptions.firstFocusInput).focus();
+			}
+
+			$("#form1").validate({
+				onkeyup: false,
+			    onclick: false,
+				onsubmit: false,
+				rules: {
+					descricao: {
+						required: true
+					}
+				},
+				messages: {
+					descricao: "Informe a Descrição"
+				}
+			});
+			actionInsert();			
+		});
+	</script>
+
+    <!--section-->
+
+	<div id="content_parameters" class="container1">
+		<form name="form1" id="form1" method="post" action="odwctrl?action=execTarefa&idTarefa=~~~"> -> $c{IDTAREFACRUD};
+			<fieldset>
+				<div id="w2uiGrid" style="width: 100%; height: 370px;"></div>
+				<table class="odw_form_edit">
+					<tr>
+						<td colspan="5">
+							<div id="form_edit_title"" class="odw_form_edit_title"></div>
+						</td>
+					</tr>
+					<tr>
+						<td width="15%" class="input-label" id="idwfatividadelabel">Cód.</td>
+						<td width="33%"><input name="idwfatividaderealizada" id="idwfatividaderealizada" type="text" size="20" maxlength="20" disabled="disabled" class="odw_parameter_input" alt="integer" odw="input"/></td>
+						<td width="4%"></td>
+						<td width="15%"></td>
+						<td width="33%"></td>
+					</tr>
+					<tr>
+						<td class="input-label">Descrição:</td>	
+						<td colspan="4"><input name="descricao" id="descricao" type="text" size="50" maxlength="255" class="odw_parameter_input" odw="input"/></td>
+					</tr>
+					<tr>				
+						<td class="input-label">Atividade</td>
+						<td>
+							$> msgBuilder.parameter('idwfatividade values="sql_var(sql_wfatividade)" custom="odw=\\\"input\\\""');
+						</td>
+						<td></td>
+						<td class="input-label">Próxima Atividade</td>
+						<td>
+							$> msgBuilder.parameter('idwfatividadeproxima values="sql_var(sql_wfatividadeproxima)" custom="odw=\\\"input\\\""');
+						</td>
+					</tr>
+					<tr>				
+						<td class="input-label">Tipo Situação</td>
+						<td>
+							$> msgBuilder.parameter('tiposituacao values="sql_var(sql_tiposituacao)" custom="odw=\\\"input\\\""');
+						</td>
+						<td></td>
+						<td class="input-label">Área Empresa</td>
+						<td>
+							$> msgBuilder.parameter('idareaempresa values="sql_var(sql_areaempresa)" custom="odw=\\\"input\\\""');
+						</td>
+					</tr>
+					<tr>				
+						<td class="input-label">Causa</td>
+						<td>
+							$> msgBuilder.parameter('idwfcausa values="sql_var(sql_wfcausa)" custom="odw=\\\"input\\\""');
+						</td>
+						<td></td>
+						<td class="input-label">Impacto</td>
+						<td>
+							$> msgBuilder.parameter('idwfimpacto values="sql_var(sql_wfimpacto)" custom="odw=\\\"input\\\""');
+						</td>
+					</tr>
+				</table>
+				<div id="buttons"></div>
+				<div id="content_parameters_bottom">
+					<div id="content_parameters_button">
+						<input name="btn_submit" type="submit" id="btn_submit" value="Enviar" class="odw_button_submit"/>
+					</div>
+				</div>
+				<h3 id="complexidade-ciclomatica"></h3>
+				<h3 id="print"></h3>
+				<div id="graph">
+					<h3 class="title"></h3>
+					<button class="print"></button>
+					<div class="cytoscape"></div>
+				</div>
+				<input name="_id" id="_id" type="hidden" value=""/>
+				<input name="dataalteracao" id="dataalteracao" type="hidden" value=""/>
+				<input name="idusuarioalteracao" id="idusuarioalteracao" type="hidden" value=""/>
+				<input name="idwfprocesso" id="idwfprocesso" type="hidden" value="~~~"/> -> $v{idwfprocesso};
+			</fieldset>
+		</form>
+	</div>

@@ -1,0 +1,58 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFFilaTrabalho_idWFFilatrabalho}' as "WFFilaTrabalho_idWFFilatrabalho"
+	,'$v{WFFilaTrabalho_idWFOcorrencia}' as "WFFilaTrabalho_idWFOcorrencia"
+	,'$v{WFFilaTrabalho_idTarefaExecAtvRealizada}' as "WFFilaTrabalho_idTarefaExecAtvRealizada"
+save_rows(1,1);
+
+# Tarefa atribui Causa, Impacto e Área Empresa à Fila de Trabalho
+
+set filtro_WFFilaTrabalho_idTarefaExecAtvRealizada = '$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}'.equals('') ? '' : ' and ft.idTarefaExecucaoAtividadeRealizada = $v{WFFilaTrabalho_idTarefaExecAtvRealizada} ';
+set filtro_WFFilaTrabalho_idWFFilatrabalho = '$v{WFFilaTrabalho_idWFFilatrabalho#}'.equals('') ? '' : ' and ft.idwffilatrabalho in ($v{WFFilaTrabalho_idWFFilatrabalho}) ';
+set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.equals('') ? '' : ' and ft.idwfocorrencia in ($v{WFFilaTrabalho_idWFOcorrencia}) ';
+
+connect $v{ds_bridge};
+
+begin_transaction;
+	sql_exec 
+		UPDATE 	wffilatrabalho ft
+		SET 	idwfimpacto = ar.idwfimpacto,
+				idareaempresa = ar.idareaempresa
+		FROM 	wfatividaderealizada ar
+		WHERE 	ar.idwfatividaderealizada = ft.idwfatividaderealizada
+				and (ar.idwfimpacto is not null or ar.idareaempresa is not null)
+				$v{filtro_WFFilaTrabalho_idTarefaExecAtvRealizada}
+				$v{filtro_WFFilaTrabalho_idWFFilatrabalho}
+				$v{filtro_WFFilaTrabalho_idWFOcorrencia}
+				;
+
+	sql_exec
+		insert into WFFilaTrabalhoCausa (idwffilatrabalho, idwfcausa, descricao)
+		Select	ft.idwffilatrabalho, ar.idwfcausa, 'Causa atribuida automaticamente pela tarefa $v{apelido}, execução $v{execId}.' descricao 
+		From 	WFFilaTrabalho ft 
+				inner join WFAtividadeRealizada ar on ar.idwfatividaderealizada = ft.idwfatividaderealizada
+		Where 	ar.idwfcausa is not null
+				and not exists (
+					Select 	null
+					From 	WFFilaTrabalhoCausa ftc
+					Where 	ftc.idwffilatrabalho = ft.idwffilatrabalho
+							and ftc.idwfcausa = ar.idwfcausa
+				)
+				$v{filtro_WFFilaTrabalho_idWFFilatrabalho}
+				$v{filtro_WFFilaTrabalho_idWFOcorrencia}
+				;
+commit;

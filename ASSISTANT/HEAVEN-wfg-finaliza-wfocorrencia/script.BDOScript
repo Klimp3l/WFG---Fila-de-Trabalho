@@ -1,0 +1,63 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFFilaTrabalho_idWFOcorrencia}' as "WFFilaTrabalho_idWFOcorrencia"
+	,'$v{WFFilaTrabalho_idWFFilatrabalho}' as "WFFilaTrabalho_idWFFilatrabalho"
+	,'$v{WFFilaTrabalho_idTarefaExecAtvRealizada}' as "WFFilaTrabalho_idTarefaExecAtvRealizada"
+save_rows(1,1);
+
+# Tarefa finaliza as Ocorrências
+
+set filtro_WFFilaTrabalho_idTarefaExecAtvRealizada = '$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}'.equals('') ? '' : ' and ft.idTarefaExecucaoAtividadeRealizada in ($v{WFFilaTrabalho_idTarefaExecAtvRealizada}) ';
+set filtro_WFFilaTrabalho_idWFFilatrabalho = '$v{WFFilaTrabalho_idWFFilatrabalho#}'.equals('') ? '' : ' and ft.idwffilatrabalho in ($v{WFFilaTrabalho_idWFFilatrabalho}) ';
+set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.equals('') ? '' : ' and o.idwfocorrencia in ($v{WFFilaTrabalho_idWFOcorrencia}) ';
+
+connect $v{ds_bridge};
+
+begin_transaction;
+
+	sql_exec 
+		Update 	WFOcorrencia
+		Set		idwffilatrabalhofinalizacao = idwffilatrabalho
+		From 	(
+			-- # Busca as ocorrências não finalizadas e as respectivas filas de trabalho
+			Select 
+				o.idwfocorrencia
+				,ft.idwffilatrabalho
+				,ft.idtarefaexecucaoatividaderealizada
+				,ar.tiposituacao
+
+				# -- Sequência de trabalho daquela ocorrência.
+				,dense_rank() over (partition by o.idwfocorrencia order by ft.idwffilatrabalho desc) as sequencia
+			From 
+				wfocorrencia o
+				inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+				inner join wfatividaderealizada ar on (ar.idwfatividaderealizada = ft.idwfatividaderealizada)
+			Where
+				o.idwffilatrabalhofinalizacao is null -- # A ocorrência ainda não foi finalizada
+				and o.expirada = 'N' -- # A ocorrência ainda não expirou
+
+				$v{filtro_WFFilaTrabalho_idTarefaExecAtvRealizada}
+				$v{filtro_WFFilaTrabalho_idWFFilatrabalho}
+				$v{filtro_WFFilaTrabalho_idWFOcorrencia}
+		) x
+		Where
+			x.sequencia = 1 -- # Última fila de trabalho
+			and x.tiposituacao = 'F' -- # A atividade realizada para a última fila de trabalho é do tipo que finaliza
+			and x.idwfocorrencia = WFOcorrencia.idwfocorrencia
+	;
+
+commit;

@@ -1,0 +1,80 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+# Tarefa gera a primeira fila de trabalho das ocorrências
+
+#   | Parâmetro                              | Default | Descrição
+#   | WFOcorrencia_idTarefaExecucaoInclusao  |         |
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+sql 
+Select
+	'$v{WFOcorrencia_idTarefaExecucaoInclusao}' as "WFOcorrencia_idTarefaExecucaoInclusao"
+save_rows(1,1);
+
+
+set filtro_WFOcorrencia_idTarefaExecucaoInclusao = '$v{WFOcorrencia_idTarefaExecucaoInclusao#}'.equals('') ? '' : 'and o.idTarefaExecucaoInclusao in ($v{WFOcorrencia_idTarefaExecucaoInclusao#})';
+
+
+connect $v{ds_bridge};
+begin_transaction;
+
+sql_exec 
+Insert into WFFilatrabalho 
+		(idwfocorrencia, idwfatividade, idempresa, datainclusao, horainclusao, idtarefaexecucaoinclusao, dataexpiracao, horaexpiracao)
+Select  idwfocorrencia, idwfatividade, idempresa, datainclusao, horainclusao, idtarefaexecucaoinclusao, dataexpiracao, horaexpiracao
+From 	(
+	Select 
+		o.idwfocorrencia
+		,a.idwfatividade
+		,o.idempresa
+		,'$v{dataAtual}'::date datainclusao
+		,'$v{dataAtual"datetime:HH:mm:ss"}'::text horainclusao
+		,$v{execId} idtarefaexecucaoinclusao
+		,now() + (
+			Case a.tipotempoexpiracao
+				when 'MINUTO' then a.tempoexpiracao * interval '1 minute'
+				when 'HORA' then a.tempoexpiracao * interval '1 hour'
+				when 'DIA' then a.tempoexpiracao * interval '1 day'
+				when 'SEMANA' then a.tempoexpiracao * interval '1 week'
+				when 'MES' then a.tempoexpiracao * interval '1 month'
+				else null
+			end
+		)::date as dataexpiracao
+		,now() + (
+			Case a.tipotempoexpiracao
+				when 'MINUTO' then a.tempoexpiracao * interval '1 minute'
+				when 'HORA' then a.tempoexpiracao * interval '1 hour'
+				when 'DIA' then a.tempoexpiracao * interval '1 day'
+				when 'SEMANA' then a.tempoexpiracao * interval '1 week'
+				when 'MES' then a.tempoexpiracao * interval '1 month'
+				else null
+			end
+		end)::time as horaexpiracao
+	From 
+		wfocorrencia o 
+		inner join wfprocessoevento pe on pe.idwfprocessoevento = o.idwfprocessoevento
+		inner join wfatividade a on a.idwfatividade = pe.idwfatividadeinicial
+	Where 
+		1 = 1
+		$v{filtro_WFOcorrencia_idTarefaExecucaoInclusao}
+		and o.expirada = 'N' /* A ocorrência ainda não expirou */
+		and pe.idwfatividadeinicial is not null /* Existe uma atividade inicial para aquele evento */
+		and not exists ( /* Não existe nenhuma fila de trabalho ainda */
+			Select 	null
+			From 	wffilatrabalho ft
+			Where 	ft.idwfocorrencia = o.idwfocorrencia
+		)
+) x
+;
+
+commit;

@@ -1,0 +1,104 @@
+# versao 1.6
+
+connect $v{ds_bridge};
+
+# -----------------------------
+# INATIVAR
+# -----------------------------
+if "$v{_action#}".equals("inativar") ;
+	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
+
+	sql update wfprocessoevento
+		   set situacao = 'I'
+			  ,dataalteracao = '$v{dataAtual}'
+			  ,idusuarioalteracao = $v{idUsuario}
+		 where idwfprocessoevento = $v{_id}
+		   and idwfprocesso = $v{idwfprocesso};
+
+	set response = "{\"status\":\"ok\"}";
+	return;
+end_if ;
+
+# -----------------------------
+# ATIVAR
+# -----------------------------
+if "$v{_action#}".equals("ativar") ;
+	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
+
+	sql update wfprocessoevento
+		   set situacao = 'A'
+			  ,dataalteracao = '$v{dataAtual}'
+			  ,idusuarioalteracao = $v{idUsuario}
+		 where idwfprocessoevento = $v{_id}
+		   and idwfprocesso = $v{idwfprocesso}
+		   and coalesce(situacao,'A') = 'I';
+
+	set response = "{\"status\":\"ok\"}";
+	return;
+end_if ;
+
+
+# -----------------------------
+# LIST
+# -----------------------------
+if "$v{_action#}".equals("list") ;
+	set where = "WHERE 1 = 1" + ("$v{search[0][field]#}".equals("") ? "" : " AND TRIM(UPPER($v{search[0][field]})) LIKE TRIM(UPPER('%$v{search[0][value]}%')) ");
+	set sort = "ORDER BY $v{sort[0][field]} $v{sort[0][direction]}";
+	set limit = "LIMIT $v{limit#all} OFFSET $v{offset#all}";
+
+	sql select 	e.idwfprocessoevento recid,
+				e.*,
+				coalesce(e.situacao,'A') as situacao,
+				p.descricao as wfprocesso,
+				a.descricao as wfatividadeinicial,
+				ar.descricao as wfatividaderealizadaexpiracao
+		from 	wfprocessoevento e
+				left join wfprocesso p on (p.idwfprocesso = e.idwfprocesso)
+				left join wfatividade a on (a.idwfatividade = e.idwfatividadeinicial)
+				left join wfatividaderealizada ar on (ar.idwfatividaderealizada = e.idwfatividaderealizadaexpiracao)
+		where 	e.idwfprocesso = $v{idwfprocesso}
+	sql_var(sql_base);
+
+	sql select * from ($v{sql_base}) x $v{where} $v{sort} $v{limit} sql_var(sql);
+	sql select count(*) as total from ($v{sql_base}) x $v{where};
+end_if ;
+
+# -----------------------------
+# INSERT / UPDATE
+# -----------------------------
+if "$v{_action#}".equals("insert") && "$v{_id#}".equals("") ;
+	sql select nextval('seq_idWFProcessoEvento') as id;
+	set _id = $c{id};
+end_if ;
+
+if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
+	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
+	set msg1 = "Evento gravado com sucesso.";
+	set msg2 = "Erro ao gravar Evento.";
+	set response = new bdo.util.SQLUtilX('wfprocessoevento', 'idwfprocesso, descricao, idwfatividadeinicial, tempoexpiracao, tipotempoexpiracao, idwfatividaderealizadaexpiracao, comentariosapenasatividade, dataalteracao, idusuarioalteracao', 'idwfprocessoevento')
+									.setNotInsertPKX(true)
+								   	.setConnectionX(execScript.getConnection())
+								   	.setInt('$v{idwfprocesso#}')
+								   	.setString('$v{descricao#}')
+								   	.setInt('$v{idwfatividadeinicial#}')
+								   	.setInt('$v{tempoexpiracao#}')
+								   	.setString('$v{tipotempoexpiracao#}')
+								   	.setInt('$v{idwfatividaderealizadaexpiracao#}')
+								   	.setString('$v{comentariosapenasatividade#S}')
+								   	.setDate('$v{dataAtual}')
+									.setInt('$v{idUsuario}')
+								   	.setIntPK('$v{_id#-1}')
+								   	.insertOrUpdate('$v{msg1}', '$v{msg2}');
+end_if ;
+
+# -----------------------------
+# DELETE
+# -----------------------------
+if "$v{_action#}".equals("delete") ;
+	set msg1 = "Evento $v{_id} excluído com sucesso.";
+	set msg2 = "Erro ao excluir Evento $v{_id}.";
+	set response = new bdo.util.SQLUtilX('wfprocessoevento', '', 'idwfprocessoevento')
+								   .setConnectionX(execScript.getConnection())
+								   .setIntPK($v{_id})
+								   .delete('$v{msg1}', '$v{msg2}');
+end_if ;

@@ -1,0 +1,44 @@
+# versao 1.2
+
+~not_save_exec;
+
+connect $v{ds_bridge};
+
+if "$v{_action#}".equals("list") ;
+	set where = "WHERE 1 = 1" + ("$v{search[0][field]#}".equals("") ? "" : " AND TRIM(UPPER($v{search[0][field]})) LIKE TRIM(UPPER('%$v{search[0][value]}%')) ");
+	set sort = "ORDER BY $v{sort[0][field]} $v{sort[0][direction]}";
+	set limit = "LIMIT $v{limit#all} OFFSET $v{offset#all}";
+	
+	sql select c.idwfcausa recid, c.* from wfcausa c $v{where} $v{sort} $v{limit} sql_var(sql);
+	sql select count(*) as total from wfcausa $v{where};
+end_if ;
+
+if "$v{_action#}".equals("insert") && "$v{_id#}".equals("") ;
+	sql select nextval('seq_idwfwfcausa') as id;
+	set _id = $c{id};
+end_if ;
+
+if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
+	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
+	set msg1 = "Causa $v{_id} gravado com sucesso.";
+	set msg2 = "Erro ao gravar Causa $v{_id}.";
+	set response = new bdo.util.SQLUtilX('wfcausa', 'descricao, situacao, horaalteracao, dataalteracao, idusuarioalteracao', 'idwfcausa')
+									   	.setConnectionX(execScript.getConnection())
+									   	.setString('$v{descricao}')
+									   	.setString('A')
+									   	.setString(execScript.getValueVar('dataAtual"date:HH:mm"'))
+									   	.setDate('$v{dataAtual}')
+									   	.setInt($v{idUsuario})
+									   	.setIntPK($v{_id})
+									   	.insertOrUpdate('$v{msg1}', '$v{msg2}');
+end_if ;
+
+
+if "$v{_action#}".equals("delete") ;
+	set msg1 = "Causa $v{_id} excluído com sucesso.";
+	set msg2 = "Erro ao excluir Causa $v{_id}.";
+	set response = new bdo.util.SQLUtilX('wfcausa', '', 'idwfcausa')
+							   .setConnectionX(execScript.getConnection())
+							   .setIntPK($v{_id})
+							   .delete('$v{msg1}', '$v{msg2}');
+end_if ;

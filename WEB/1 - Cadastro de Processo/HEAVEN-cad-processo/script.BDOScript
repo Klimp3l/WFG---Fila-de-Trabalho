@@ -1,0 +1,166 @@
+# versao 1.2
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 15/07/2022 | Bernardo    | Elcio       | 27716	     | Criação.
+# | 19/04/2024 | AndreOeste  | Julio       | 32919	     | Adicionado dois botões switches para aperfeiçoamento do cadastro. Para que o processo, possa buscar se há utilização do mesmo na fila de trabalho ou na não conformidade.
+# | 14/06/2024 | Vinicius    | Elcio       | 33457	     | Adiconado campo Informações do Processo onde será salvo uma breve observação referente ao processo na tabela wfprocesso.
+
+<script_function name="getList">
+	~not_save_exec;
+
+	set run = ''+execScript.getTarefaExecucao().setObs('getList - $v{usuario}');
+
+	set filtroId		= '$v{id#}'.equals('') ? '' : 'and p.idwfprocesso = $v{id}';
+	set filtroDescricao = '$v{descricao#}'.equals('') ? '' : " and upper(p.descricao) like upper('%$v{descricao}%')";
+	set filtroWhere		= (
+		'$v{filtroId#}'.equals('')
+			? "$v{filtroDescricao}" + ("$v{situacao#}".equals("") ? "" : " and p.situacao = $v{situacao}")
+			: '$v{filtroId}'
+	);
+	
+	set sort = "order by $v{order#1}";
+	set offset = ($v{pageIndex#1}-1) * $v{pageSize#20};
+
+	connect $v{ds_bridge};
+	
+	sql 
+	Select 
+		p.idwfprocesso id
+		,p.descricao as descricao
+		,cast(p.dataalteracao as varchar(10)) as dataalteracao
+		,p.idusuarioalteracao
+		,p.situacao
+		,coalesce(p.usafilatrabalho, 'N') as usafilatrabalho
+		,coalesce(p.usanaoconformidade, 'N') as usanaoconformidade
+		,p.observacao as observacao
+	From
+		wfprocesso p
+	Where
+		1=1
+		$v{filtroWhere}
+	sql_var(sql_base) no_exec;
+
+	sql select * from ($v{sql_base}) x $v{sort}
+	sql_props(lower_labels limit="$v{pageSize#20}" offset="$v{offset}") sql_var(sql);
+
+	sql select count(*) total from ($v{sql_base}) x sql_props(lower_labels);
+	
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> msgBuilder.setHeader('total', '$c{total}');
+	$> sb.append('{ "total": $c{total}, "list": [').append(msgBuilder.sqlVarToJSON('sql')).append('] }');
+</script_function>
+
+<script_function name="save">
+	~write_exec_log;
+
+	set run = ''+execScript.getTarefaExecucao().setObs('save - $v{usuario}');
+
+	set msg1 = "Registro salvo com sucesso";
+	set msg2 = "Não foi possível salvar o registro";
+
+	connect $v{ds_bridge};
+
+	begin_transaction ;
+		run_script_java_groovy insertOrUpdate;
+
+		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
+			rollback;
+			stop_if true;
+		end_if;
+	commit ;
+
+	<script_java_groovy name="insertOrUpdate">
+		import groovy.json.JsonSlurper;
+		import bdo.util.SQLUtilX;
+		import java.sql.Connection;
+		import groovy.sql.Sql;
+
+		def sql = new Sql(execScript.getConnection());
+
+		def model = new JsonSlurper().parseText(execScript.getValueVar("model"));
+		String msg1 = execScript.getValueVar('msg1');
+		String msg2 = execScript.getValueVar('msg2');
+		String response;
+
+		int idprocesso	= model.id ? model.id : sql.firstRow("Select nextval('seq_idWFProcesso')")[0];
+		String situacao	= (model.situacao || model.situacao == 'A') ? 'A' : 'I';
+		
+		response = new SQLUtilX('wfprocesso', 'descricao, observacao, dataalteracao, idusuarioalteracao, situacao, usafilatrabalho, usanaoconformidade', 'idwfprocesso')
+									   	.setConnectionX(execScript.getConnection())
+									   	.setString(model.descricao)
+									   	.setString(model.observacao)
+									   	.setDate(model.dataalteracao ? model.dataalteracao : execScript.getValueVar('dataAtual'))
+									   	.setInt(execScript.getValueVar('idUsuario'))
+									   	.setString(situacao)
+									   	.setString(model.usafilatrabalho)
+									   	.setString(model.usanaoconformidade)
+									   	.setIntPK(idprocesso)
+									   	.insertOrUpdate(execScript.getValueVar('msg1'), execScript.getValueVar('msg2'));
+		execScript.addVar('response', response);
+	
+		if (response.contains(msg2)) {
+			return false;
+		} else {
+			return true;
+		}
+	</script_java_groovy>
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append(execScript.getValueVar('response#'));
+</script_function>
+
+<script_function name="delete">
+	~not_save_exec;
+	
+	set run = ''+execScript.getTarefaExecucao().setObs('delete - $v{usuario}');
+	
+	set msg1 = "Registro deletado com sucesso";
+	set msg2 = "Não foi possível deletar o registro";
+	
+	connect $v{ds_bridge};
+
+	begin_transaction ;
+		run_script_java_groovy delete;
+
+		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
+			rollback;
+			stop_if true;
+		end_if;
+	commit ;
+
+	<script_java_groovy name="delete">
+		import bdo.util.SQLUtilX;
+		import java.sql.Connection;
+		import groovy.sql.Sql;
+		
+		String msg1 = execScript.getValueVar('msg1');
+		String msg2 = execScript.getValueVar('msg2');
+		String response;
+
+		int idprocesso = execScript.getValueVarAsInt('id');
+		
+		response = new SQLUtilX('wfprocesso','', 'idwfprocesso')
+					.setConnectionX(execScript.getConnection())
+					.setIntPK(idprocesso)					
+			   		.delete(msg1, msg2);
+		execScript.addVar('response', response);
+	
+		if (response.contains(msg2)) {
+			return false;
+		} else {
+			return true;
+		}	
+	</script_java_groovy>		
+	
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append(execScript.getValueVar('response#'));
+</script_function>

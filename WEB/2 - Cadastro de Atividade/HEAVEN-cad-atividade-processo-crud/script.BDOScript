@@ -1,0 +1,273 @@
+# versao 1.2
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | xx/xx/xxxx | xxxxx       | xxxxx       | xxxxxx      | Criação.
+# | 13/07/2022 | Bernardo    | Elcio       | 27258       | Adicionado para salvar os LOGS das alterações.
+# | 21/08/2023 | Bernardo    | Elcio       | 31091       | Atividado novo modo de log;
+
+connect $v{ds_bridge};
+
+if "$v{_action#}".equals("list");
+	set where = "WHERE 1 = 1" + ("$v{search[0][field]#}".equals("") ? "" : " and trim(upper(cast($v{search[0][field]} as varchar(255)))) like trim(upper('%$v{search[0][value]}%')) ");
+	set sort = "ORDER BY $v{sort[0][field]#1} $v{sort[0][direction]#}";
+	set limit = "LIMIT $v{limit#all} OFFSET $v{offset#all}";
+	
+	sql 
+	Select 
+		a.idwfatividade recid
+		,p.descricao as wfprocesso
+		,ar.descricao as wfatividaderealizada
+		,ar.idwfatividaderealizada as idwfatividaderealizadaexpira
+		,a.*
+	From
+		wfatividade a
+		inner join wfprocesso p on (p.idwfprocesso = a.idwfprocesso)
+		left join wfatividaderealizada ar on (ar.idwfatividaderealizada = a.idwfatividaderealizadaexpiracao)
+	Where 
+		a.idwfprocesso = $v{idwfprocesso}
+	sql_var(sql_base) no_exec ;
+
+	sql select * from ($v{sql_base}) x $v{where} $v{sort} $v{limit} sql_var(sql);
+	sql select count(*) as total from ($v{sql_base}) x $v{where};
+end_if ;
+
+if "$v{_action#}".equals("list-atividadecolaborador") ;
+	set where = " WHERE 1 = 1 " + ("$v{search[0][field]#}".equals("") ? "" : " and trim(upper(cast($v{search[0][field]} as varchar(255)))) like trim(upper('%$v{search[0][value]}%')) ");
+	set sort = "ORDER BY $v{sort[0][field]#3} $v{sort[0][direction]#}";
+	set limit = "LIMIT $v{limit#all} OFFSET $v{offset#all}";
+
+	sql	
+	Select
+		cf.idcolaborador||'.'||cf.idempresa||'.'||cf.idfuncao recid 
+		,idwfatividadecolaborador
+		,c.idcolaborador
+		,c.nome colaborador
+		,fc.idfuncao
+		,fc.descricao funcao
+		,e.idempresa
+		,coalesce(e.apelido, e.nomefantasia)||' - '||e.idempresa empresa
+		,ac.tipo
+		,ac.tempomonitoramento
+		,ac.ignoraempresawfatividadecolaborador
+	From
+		colaborador c
+		inner join colaboradorfuncao cf on (cf.idcolaborador = c.idcolaborador)
+		inner join empresa e on (e.idempresa = cf.idempresa)
+		inner join funcaocolaborador fc on (fc.idfuncao = cf.idfuncao)
+		left outer join	wfatividadecolaborador ac on (ac.idcolaborador = cf.idcolaborador and ac.idempresa = cf.idempresa and ac.idfuncao = cf.idfuncao and ac.idwfatividade = $v{idwfatividade#-1})
+	Where
+		ac.idwfatividadecolaborador is not null
+	sql_var(sql_base) no_exec ;
+
+	sql Select * 
+		From ($v{sql_base}) x
+		$v{where} $v{sort} $v{limit} 
+	sql_var(sql) sql_props(lower_labels);
+
+	sql Select count(*) total
+		From ($v{sql_base}) x
+		$v{where}
+		sql_props(lower_labels);
+
+end_if ;
+
+if "$v{_action}".equals("list-atividadecolaborador-avaliable");
+
+	set where = (" WHERE recid not in ($v{selected#}) " + "$v{search[0][field]#}".equals("") ? "" : " and trim(upper(cast($v{search[0][field]} as varchar(255)))) like trim(upper('%$v{search[0][value]}%')) ");
+	set sort = "ORDER BY $v{sort[0][field]#3} $v{sort[0][direction]#}";
+	set limit = "LIMIT $v{limit#all} OFFSET $v{offset#all}";
+
+	sql	
+	Select
+		cf.idcolaborador||'.'||cf.idempresa||'.'||cf.idfuncao recid 
+		,idwfatividadecolaborador
+		,c.idcolaborador
+		,c.nome colaborador
+		,fc.idfuncao
+		,fc.descricao funcao
+		,e.idempresa
+		,coalesce(e.apelido, e.nomefantasia)||' - '||e.idempresa empresa
+		,'E' tipo /* Executor */
+		,'N' ignoraempresawfatividadecolaborador /* Não */
+	From
+		colaborador c
+		inner join colaboradorfuncao cf on (cf.idcolaborador = c.idcolaborador)
+		inner join empresa e on (e.idempresa = cf.idempresa)
+		inner join funcaocolaborador fc on (fc.idfuncao = cf.idfuncao)
+		left outer join	wfatividadecolaborador ac on (ac.idcolaborador = cf.idcolaborador and ac.idempresa = cf.idempresa and ac.idfuncao = cf.idfuncao and ac.idwfatividade = $v{idwfatividade#-1})
+	Where
+		--ac.idwfatividadecolaborador is null
+		c.situacao = 'A'
+	sql_var(sql_base) no_exec ;
+
+	sql Select * 
+		From ($v{sql_base}) x
+		$v{where} $v{sort}
+	sql_var(sql) sql_props(lower_labels);
+
+	sql Select count(*) total
+		From ($v{sql_base}) x
+		$v{where}
+		sql_props(lower_labels);
+
+end_if ;
+
+
+
+if "$v{_action#}".equals("insert") && "$v{_id#}".equals("") ;
+	sql select nextval('seq_WFAtividade') as id;
+	set _id = $c{id};
+end_if ;
+
+if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
+	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
+	set msg1 = "Atividade gravada com sucesso.";
+	set msg2 = "Erro ao gravar Atividade.";
+
+	~write_exec_log;
+
+	begin_transaction;
+		run_script_java_groovy script1;
+	commit;
+	
+	<script_java_groovy name="script1">
+		import groovy.json.JsonSlurper;
+		import bdo.util.SQLUtilX;
+		import java.sql.Connection;
+		import groovy.sql.Sql;
+		import java.util.Date;
+		import java.math.BigDecimal;
+		
+		$include{script:SHARED-script-java-groovy-log-acao-functions}include
+
+		def sql = new Sql(execScript.getConnection());
+		sql.executeUpdate("SET LOCAL var.logged_user = '${execScript.getValueVar('usuario')}'");
+		
+		def objArray = new JsonSlurper().parseText(execScript.getValueVar('AtividadeColaborador'));
+		String response;
+		
+		int idwfatividade = execScript.getValueVarAsInt('_id');
+		def getDate(String value) {
+		    return com.elisha.commons.util.StringUtil.isEmpty(value) ? null : bdo.util.DateUtil.toYMD(value);
+		}
+
+		/* ################################## */
+		/* # Realiza as operações da tarefa # */
+		/* ################################## */
+
+		/* #################################################### */
+		/* # 1) Excluí os registros que não estão na listagem # */
+		/* #################################################### */
+
+		String idsNotIn	= getListValues(objArray, "idwfatividadecolaborador", "-1", "");
+		String command	= """
+			delete from
+				wfatividadecolaborador
+			where
+				idwfatividade = ${idwfatividade}
+				and idwfatividadecolaborador not in (${idsNotIn})
+		""";
+
+		execScript.debug("1 ###: $command");
+		sql.execute(command);
+
+		response = new bdo.util.SQLUtilX('wfatividade', 'descricao, idwfprocesso, dataalteracao, idusuarioalteracao, prioridade, tempoexpiracao, tipotempoexpiracao, idwfatividaderealizadaexpiracao, ignoraempresawfatividadecolaborador', 'idwfatividade')
+									   	.setConnectionX(execScript.getConnection())
+									   	.setString(execScript.getValueVar('descricao'))
+									   	.setInt(execScript.getValueVarAsInt('idwfprocesso'))
+										.setDate(execScript.getValueVar('dataAtual'))
+										.setInt(execScript.getValueVarAsInt('idUsuario'))
+									   	.setInt(execScript.getValueVarAsInt('prioridade#1'))
+									   	.setInt(execScript.getValueVar('tempoexpiracao#').equals('') ? null : execScript.getValueVarAsInt('tempoexpiracao'))
+									   	.setString(execScript.getValueVar('tipotempoexpiracao#'))
+									   	.setInt(execScript.getValueVar('idwfatividaderealizadaexpiracao#').equals('') || execScript.getValueVar('idwfatividaderealizadaexpiracao#').equals('-1') ? null : execScript.getValueVarAsInt('idwfatividaderealizadaexpiracao'))
+									   	.setString(execScript.getValueVar('ignoraempresawfatividadecolaborador#'))
+									   	.setIntPK(idwfatividade)
+									   	.insertOrUpdate(execScript.getValueVar('msg1'), execScript.getValueVar('msg2'));
+
+		execScript.debug("2 ###: $response");
+		if (response.contains(execScript.getValueVar('msg2'))) {
+			return false;
+		}
+
+		SQLUtilX sqlUtilX = new SQLUtilX('wfatividadecolaborador', 'idwfatividade, idcolaborador, idfuncao, idempresa, tipo, tempomonitoramento, ignoraempresawfatividadecolaborador', 'idwfatividadecolaborador');
+		sqlUtilX.setConnectionX(execScript.getConnection())
+				.setNotInsertPKX(true);
+				
+		execScript.debug("3 ###: $response");
+		for (obj in objArray) {
+			sqlUtilX.setIndex(-1).setIndexPK(-1)
+					.setInt(idwfatividade)
+					.setInt(obj.idcolaborador)
+					.setInt(obj.idfuncao)
+					.setInt(obj.idempresa)
+					.setString(obj.tipo ? obj.tipo : 'E')
+					.setInt(obj.tempomonitoramento)
+					.setString(obj.ignoraempresawfatividadecolaborador ? obj.ignoraempresawfatividadecolaborador : 'H')
+					.setIntPK(obj.idwfatividadecolaborador ? obj.idwfatividadecolaborador : -1)
+
+			response = sqlUtilX.insertOrUpdate(execScript.getValueVar('msg1'), execScript.getValueVar('msg2'));
+
+			execScript.debug("4 ###: $response");
+			if (response.contains(execScript.getValueVar('msg2'))) {
+				return false;
+			}
+		}
+
+		if (response && response.contains('Erro')) {
+			execScript.addVar('response', response);
+			return false;
+		}
+			
+		execScript.addVar('response', response);
+
+		return true;
+	</script_java_groovy>
+
+end_if ;
+
+if "$v{_action#}".equals("delete") ;
+	set msg1 = "Atividade $v{_id} excluída com sucesso.";
+	set msg2 = "Erro ao excluir Atividade $v{_id}.";
+
+	begin_transaction;
+		sql_exec SET LOCAL var.logged_user = '$v{usuario}';
+			
+		sql_exec delete from wfatividadecolaborador where idwfatividade = $v{_id};
+		sql_exec delete from wfatividade where idwfatividade = $v{_id};
+		sql_exec update wfatividaderealizada set idwfatividade = null where idwfatividade = $v{_id};
+		sql_exec update wfatividaderealizada set idwfatividadeproxima = null where idwfatividadeproxima = $v{_id};
+	commit;
+
+	<script_java_groovy name="delete">
+		import bdo.util.SQLUtilX;
+		import java.sql.Connection;
+		import groovy.sql.Sql;
+
+		String msg1 = execScript.getValueVar('msg1');
+		String msg2 = execScript.getValueVar('msg2');
+		String response;
+
+		int idwfatividade = Integer.parseInt(execScript.getValueVar('_id'));
+		
+		SQLUtilX sqlUtilXA = new SQLUtilX('tabela','', 'pk')
+								.setConnectionX(execScript.getConnection());
+		response = sqlUtilXA
+					.setIntPK(idempresa)					
+			   		.delete(msg1, msg2);
+		execScript.addVar('response', response);
+	
+		if (response.contains(msg2)) {
+			return false;
+		} else {
+			return true;
+		}	
+	</script_java_groovy>	
+
+
+	set response = new bdo.util.SQLUtilX('wfatividade', '', 'idwfatividade')
+							   .setConnectionX(execScript.getConnection())
+							   .setIntPK($v{_id})
+							   .delete('$v{msg1}', '$v{msg2}');
+end_if ;

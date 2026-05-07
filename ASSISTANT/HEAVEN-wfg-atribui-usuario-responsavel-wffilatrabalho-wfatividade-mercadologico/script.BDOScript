@@ -1,0 +1,171 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFFilaTrabalho_idWFFilatrabalho}' as "WFFilaTrabalho_idWFFilatrabalho"
+	,'$v{WFFilaTrabalho_idWFOcorrencia}' as "WFFilaTrabalho_idWFOcorrencia"
+	,'$v{WFFilaTrabalho_idTarefaExecAtvRealizada}' as "WFFilaTrabalho_idTarefaExecAtvRealizada"
+save_rows(1,1);
+
+# Tarefa gera a próxima fila de trabalho
+
+# Impede que a tarefa seja rodada 2 vezes simultaneamente. 
+#include{HEAVEN-script-sql-verifica-execucao-tarefa}include
+
+set filtro_WFFilaTrabalho_idTarefaExecAtvRealizada = '$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}'.equals('') ? '' : ' and ft.idTarefaExecucaoAtividadeRealizada in ($v{WFFilaTrabalho_idTarefaExecAtvRealizada}) ';
+set filtro_WFFilaTrabalho_idTarefaExecucaoInclusao = '$v{WFFilaTrabalho_idTarefaExecucaoInclusao#}'.equals('') ? '' : ' and ft.idtarefaexecucaoinclusao in ($v{WFFilaTrabalho_idTarefaExecucaoInclusao}) ';
+set filtro_WFOcorrencia_idTarefaExecucaoInclusao = '$v{WFOcorrencia_idTarefaExecucaoInclusao#}'.equals('') ? '' : ' and o.idtarefaexecucaoinclusao in ($v{WFOcorrencia_idTarefaExecucaoInclusao}) ';
+set filtro_WFOcorrencia_idWFProcessoEvento = '$v{WFOcorrencia_idWFProcessoEvento#}'.equals('') ? '' : ' and o.idwfprocessoevento in ($v{WFOcorrencia_idWFProcessoEvento}) ';
+set filtro_WFFilaTrabalho_idWFFilatrabalhoAnterior = '$v{WFFilaTrabalho_idWFFilatrabalho#}'.equals('') ? '' : ' and ft.idwffilatrabalhoanterior in ($v{WFFilaTrabalho_idWFFilatrabalho}) ';
+set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.equals('') ? '' : ' and o.idwfocorrencia in ($v{WFFilaTrabalho_idWFOcorrencia}) ';
+
+connect $v{ds_bridge};
+
+set datainiciobuscadados =  '$exp{addDays($v{dataAtual}, -20)}exp';
+
+begin_transaction;
+
+	sql_exec 
+	With 
+		ocorrencias as (
+			-- # Busca as ocorrências não finalizadas e as respectivas últimas filas de trabalho.
+			Select
+				*
+			From (
+				Select
+					ft.idwffilatrabalho
+					,ft.idempresa
+					,ft.idusuarioresponsavel
+					,ft.idwfatividade
+					,ft.expirada
+					,ft.idwfatividaderealizada
+					,o.chaves
+					,dense_rank() over (partition by o.idwfocorrencia order by ft.idwffilatrabalho desc) as sequencia
+				From
+					(	Select	o.idwfocorrencia
+								,o.chaves
+						From	wfocorrencia o 
+						Where	o.idwffilatrabalhofinalizacao is null -- # A ocorrência não foi finalizada
+								and o.expirada = 'N' -- # A ocorrência não expirou
+							    and o.datainclusao >=  '$v{datainiciobuscadados}' --   current_date -190
+							    $v{filtro_WFFilaTrabalho_idWFOcorrencia}
+					) o
+					inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+					$v{filtro_WFOcorrencia_idTarefaExecucaoInclusao}
+					$v{filtro_WFFilaTrabalho_idWFFilatrabalhoAnterior}
+			) x
+			Where
+				x.sequencia = 1 -- # Última fila de trabalho
+
+				-- #Filtros referentes a última fila de trabalho
+				and x.expirada = 'N' 				 -- # A fila de trabalho não expirou
+				and x.idusuarioresponsavel is null 	 -- # Não existe nenhum usuario responsavel pela fila de trabalho
+				and x.idwfatividaderealizada is null -- # Não foi realizada nenhuma atividade para aquela fila de trabalho
+		),
+		usuariosresponsaveis as (
+			-- # Busca os usuarios responsaveis por mercadológico
+			Select distinct
+				u.idusuario 
+				,u.nome
+				,cf.idfuncao
+				,e.idempresa
+				,cast(fm.idmercadologico as bigint) as idmercadologico
+				,fm.tipomercadologico
+				,ac.idwfatividade
+			From
+				usuario u
+				inner join colaborador c on (c.idcolaborador = u.idcolaborador)
+				inner join colaboradorfuncao cf on (cf.idcolaborador = c.idcolaborador)
+				inner join funcaomercadologico fm on (fm.idcolaborador = cf.idcolaborador and fm.idfuncao = cf.idfuncao)
+				inner join wfatividadecolaborador ac on (ac.idcolaborador = c.idcolaborador and ac.idfuncao = cf.idfuncao)
+				inner join wfatividade a on (a.idwfatividade = ac.idwfatividade)
+
+				inner join empresa e on (
+					-- # caso coalesce(ac.ignoraempresawfatividadecolaborador, 'H') = 'H' então deve-se herdar de ac.ignoraempresawfatividadecolaborador
+					coalesce(case 
+								when coalesce(ac.ignoraempresawfatividadecolaborador, 'H') = 'H' then a.ignoraempresawfatividadecolaborador
+								else ac.ignoraempresawfatividadecolaborador
+					end, 'N') = 'S'
+					-- # Se o teste acima não for true então deve buscar apenas da empresa relacionada, caso contrário deverá vir todas as empresas
+					or e.idempresa = ac.idempresa)
+
+				inner join ocorrencias o on (o.idwfatividade = a.idwfatividade and o.idempresa = e.idempresa)
+			Where	
+				u.situacao = 'A'
+				and c.situacao = 'A'
+				and ac.tipo = 'E' -- # Executor
+		),
+		usuariosaleatorios as (
+			-- # Caso não tenha nenhum colaborador responsavel pelo mercadológioco, atribuir a alguem aleatoriamente
+			Select distinct
+				*
+			From (
+				Select
+					rank() over (partition by cf.idfuncao, c.idempresatrabalho order by u.idusuario) as numusuariosresp
+					,u.idusuario
+					,u.nome
+					,cf.idfuncao
+					,e.idempresa
+					,ac.idwfatividade
+				From
+					usuario u
+					inner join colaborador c on (c.idcolaborador = u.idcolaborador)
+					inner join colaboradorfuncao cf on (cf.idcolaborador = c.idcolaborador)
+					inner join wfatividadecolaborador ac on (ac.idcolaborador = c.idcolaborador and ac.idfuncao = cf.idfuncao)
+					inner join wfatividade a on (a.idwfatividade = ac.idwfatividade)
+
+					inner join empresa e on (
+						-- # caso coalesce(ac.ignoraempresawfatividadecolaborador, 'H') = 'H' então deve-se herdar de ac.ignoraempresawfatividadecolaborador
+						coalesce(case
+									when coalesce(ac.ignoraempresawfatividadecolaborador, 'H') = 'H' then a.ignoraempresawfatividadecolaborador
+									else ac.ignoraempresawfatividadecolaborador
+						end, 'N') = 'S' 
+						-- # Se o teste acima não for true então deve buscar apenas da empresa relacionada, caso contrário deverá vir todas as empresas
+						or e.idempresa = ac.idempresa)
+
+					inner join ocorrencias o on (o.idwfatividade = a.idwfatividade and o.idempresa = e.idempresa)
+				Where
+					u.situacao = 'A'
+					and c.situacao = 'A'
+					and ac.tipo = 'E' -- # Executor
+			) x
+			Where numusuariosresp = 1
+		)
+	Update 	WFFilaTrabalho ft
+	Set		idusuarioresponsavel = x.idusuarioresponsavel
+	From (
+		Select 
+			o.idwffilatrabalho
+			,max(coalesce(urp.idusuario, urs.idusuario, urf.idusuario, urg.idusuario, urd.idusuario, ura.idusuario)) as idusuarioresponsavel
+		From
+			ocorrencias o		
+			inner join produto p on p.idproduto = (o.chaves->>'idproduto')::bigint
+			left join usuariosresponsaveis urp on (urp.idwfatividade = o.idwfatividade and urp.idempresa = o.idempresa and urp.tipomercadologico = 'P' and urp.idmercadologico = p.idproduto)
+			left join usuariosresponsaveis urs on (urs.idwfatividade = o.idwfatividade and urs.idempresa = o.idempresa and urs.tipomercadologico = 'S' and urs.idmercadologico = p.idsetor)
+			left join usuariosresponsaveis urf on (urf.idwfatividade = o.idwfatividade and urf.idempresa = o.idempresa and urf.tipomercadologico = 'F' and urf.idmercadologico = p.idfamilia)
+			left join usuariosresponsaveis urg on (urg.idwfatividade = o.idwfatividade and urg.idempresa = o.idempresa and urg.tipomercadologico = 'G' and urg.idmercadologico = p.idgrupo)
+			left join usuariosresponsaveis urd on (urd.idwfatividade = o.idwfatividade and urd.idempresa = o.idempresa and urd.tipomercadologico = 'D' and urd.idmercadologico = p.iddepartamento)
+			left join usuariosaleatorios ura on (ura.idwfatividade = o.idwfatividade and ura.idempresa = o.idempresa)
+		Group by
+			1
+	) x
+	Where 
+		ft.datainclusao > '$v{datainiciobuscadados}' -- current_date -190
+		and x.idusuarioresponsavel is not null
+		and ft.idusuarioresponsavel is null
+		and x.idwffilatrabalho = ft.idwffilatrabalho
+	;
+
+commit;

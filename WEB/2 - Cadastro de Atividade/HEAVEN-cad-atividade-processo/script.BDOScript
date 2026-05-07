@@ -1,0 +1,21 @@
+# versao 1.12
+set _iframe = true;
+
+connect $v{ds_bridge};
+sql Select idwfprocesso, trim(descricao)||' - '||cast(idwfprocesso as varchar(100)) descridwfprocesso from wfprocesso where situacao = 'A' order by 2 sql_var(sql_idwfprocesso);
+
+parameter idwfprocesso label="Processo" type="integer" values="sql_var(sql_idwfprocesso)";
+
+sql select idwfatividaderealizada idwfatividadeexpiracao, descricao descridwfatividadeexpiracao from wfatividaderealizada where idwfprocesso = $v{idwfprocesso}
+Union all Select cast(-1 as integer) as idwfatividadeexpiracao, '' as descridwfatividadeexpiracao
+
+order by 1
+sql_var(sql_idwfatividaderealizadaexpiracao);
+
+sql select 'S' ignoraempresawfatividadecolaborador, 'Sim' descrignoraempresawfatividadecolaborador, 'S' "id", 'Sim' "text" union all 
+	select 'N', 'Não', 'N', 'Não' union all
+	select 'H', 'Herda', 'H', 'Herda' sql_var(sql_ignoraempresawfatividadecolaborador);
+sql select 'E' "id", 'Executor' "text" union all select 'M', 'Monitor' sql_var(sql_tipo);
+
+connect $v{datasource2};
+sql select idtarefa as idtarefacrud from tarefa where apelido = '$v{apelido}-crud';

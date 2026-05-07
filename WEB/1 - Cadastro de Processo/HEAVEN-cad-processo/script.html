@@ -1,0 +1,126 @@
+$> import com.elisha.commons.util.CryptUtil;
+$> msgBuilder.setContentEncoding('gzip');
+$> msgBuilder.setCharset('UTF-8');
+$> msgBuilder.setReplaceVarsOnTemplate(true);
+$> msgBuilder.setHtmlTemplates('$v{embedded#}'.equals('true') ? 'element-crud-1.html' : 'element-crud-1.html');
+$> msgBuilder.setContentSections('css', 'body', 'js');
+
+$> sb.append("""<link rel="stylesheet" type="text/css" href="odwctrl?action=execTarefa&apelido=element-ui-crud-base-css&tKey=${CryptUtil.getHexHash('#element-ui-crud-base-css.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}" />\n\n""");
+
+<!--section-->
+
+<el-container>
+	<el-main>
+		<el-card shadow="never" id="vueTable" class="box-card el-cst-crud-card">
+			<el-form ref="formFilter" :model="filterModel" :inline="true" size="medium" class="demo-form-inline titleUpLine" @submit.native.prevent>
+				<el-row :gutter="20">
+					<el-col :xs="24" :sm="24" :md="7" :lg="7" :xl="7">
+						<el-form-item label="Descrição">
+							<el-input ref="filter_empresa" v-model="filterModel.descricao" placeholder="Pesquisar pela Descrição" @keyup.enter.native="filter(true)"></el-input>
+						</el-form-item>
+					</el-col>
+					<el-col :xs="24" :sm="24" :md="7" :lg="7" :xl="7">
+						<el-form-item label="ID">
+							<el-input ref="findby_id" v-model="filterModel.id" placeholder="Localizar por Id" @keyup.enter.native="filter" style="width: 120px;"></el-input>
+						</el-form-item>
+					</el-col>
+					<el-col :xs="24" :sm="24" :md="5" :lg="5" :xl="5">
+						<el-form-item label="Situação" @keyup.enter.native="filter(true)">
+							<el-select v-model="filterModel.situacao">
+								<el-option label="Ativo" value="'A'"></el-option>
+								<el-option label="Inativo" value="'I'"></el-option>
+								<el-option label="Todas" value=""></el-option>
+							</el-select>
+						</el-form-item>
+					</el-col>
+					<el-col :xs="24" :sm="24" :md="5" :lg="5" :xl="5" style="float: right">
+						<div style="text-align: right;">
+							<el-form-item><br>
+								<el-button type="primary" size="small" plain @click="filter" icon="el-icon-fa-filter">Filtrar</el-button>
+								<el-button type="warning" size="small" plain @click="reset()" icon="el-icon-fa-eraser"></el-button>
+							</el-form-item>
+						</div>
+					</el-col>
+				</el-row>
+			</el-form>
+
+			<el-search-table-pagination ref="table"
+				:fetch="fetch"
+				@sort-change="onSortChange" @current-change="onCurrentChange" 
+				:stripe=false :border=false :highlight-current-row=true
+				row-key="id" list-field="list" total-field="total" :page-sizes="[5,10,25,50,100]" :params="filterModel"
+				:columns="$options.columns">
+				<template slot-scope="scope" slot="rowIndex">
+					{{ scope.$index }}
+				</template>
+		      	<template slot-scope="scope" slot="ativo">
+			    	<el-switch v-model="scope.row.situacao" :active-value="'A'" :disabled="true"></el-switch>
+		      	</template>
+			</el-search-table-pagination>
+		</el-card>
+	</el-main>
+</el-container>
+
+<el-container>
+    <el-main>
+        <el-card shadow="never" id="vueFormEdit" class="box-card el-cst-crud-card" v-loading="loading">
+            <div slot="header" class="clearfix">
+                <el-row>
+                    <el-col :xs="4" :sm="4" :md="8" :lg="8" :xl="8">
+                        <span class="el-dialog__title">{{ editFormTitle }}</span>
+                    </el-col>
+                    <el-col :xs="20" :sm="20" :md="16" :lg="16" :xl="16">
+                        <div style="float: right">
+                            <el-button type="primary" @click="insert()" plain size="mini"><i class="el-icon-fa-plus"></i><span>Incluir</span></el-button>
+                            <el-button type="success" @click="save()" plain size="mini"><i class="el-icon-fa-save"></i> <span>Salvar</span></el-button>
+                            <el-button type="danger" v-show="editModel.id" @click="remove()" plain size="mini"><i class="el-icon-fa-trash"></i><span>Excluir</span></el-button>
+                        </div>
+                    </el-col>    
+                </el-row>
+            </div>
+            <el-form ref="formEdit" :model="editModel" :rules="rules" label-width="150px" size="medium" class="demo-edit">
+                <el-row>
+                    <el-col :span="12">
+                        <el-form-item label="Cód." prop="id">
+                            <el-input v-model="editModel.id" :disabled=true></el-input>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+    					<div style="display: flex; justify-content: space-between">
+        					<el-form-item label="Situação" prop="ativo">
+            					<el-switch :active-value="'A'" v-model="editModel.situacao"></el-switch>
+        					</el-form-item>
+        					<el-form-item label="Fila de Trabalho" prop="ativo">
+            					<el-switch :active-value="'S'" :inactive-value="'N'" v-model="editModel.usafilatrabalho"></el-switch>
+        					</el-form-item>
+        					<el-form-item label="Não Conformidade">
+            					<el-switch :active-value="'S'" :inactive-value="'N'" v-model="editModel.usanaoconformidade"></el-switch>
+        					</el-form-item>
+    					</div>
+					</el-col>
+                </el-row>
+                <el-cst-line></el-cst-line>
+                <el-row>
+                    <el-col :span="24">
+                        <el-form-item label="Descricao" prop="descricao">
+                            <el-input v-model="editModel.descricao"></el-input>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-row>
+                    <el-col :span="24">
+                        <el-form-item label="Informações do Processo:" prop="observacao">
+                            <el-input v-model="editModel.observacao" type="textarea" :rows="3"></el-input>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+            </el-form>
+        </el-card>
+    </el-main>
+</el-container>
+  
+<!--section-->
+
+$> sb.append("""<script type="text/javascript" charset="UTF-8" src="odwctrl?action=execTarefa&apelido=element-ui-crud-base-js&tKey=${CryptUtil.getHexHash('#element-ui-crud-base-js.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}"></script>\n""");
+
+$> sb.append("""<script type="text/javascript" charset="UTF-8" src="odwctrl?action=execTarefa&apelido=$v{apelido}-js&tKey=${CryptUtil.getHexHash('#$v{apelido}.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}&apelidoTarefaMae=$v{apelido}$v{parametrosUrl#}"></script>""");

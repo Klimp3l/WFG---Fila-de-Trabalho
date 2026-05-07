@@ -1,0 +1,65 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+# Tarefa busca as ocorrências que estrapolaram o prazo de resolução e da baixa tanto na ocorrência quanto na última fila de trabalho.
+#   | Parâmetro                                      | Default | Descrição
+#   | WFProcessoEvento_idWFProcessoEvento            |         | 
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFProcessoEvento_idWFProcessoEvento}' as "WFProcessoEvento_idWFProcessoEvento"
+	,'$v{WFOcorrencia_apelidoTarefaEncaminhamento}' as "WFOcorrencia_apelidoTarefaEncaminhamento"
+save_rows(1,1);
+
+set filtro_WFProcessoEvento_idWFProcessoEvento = '$v{WFProcessoEvento_idWFProcessoEvento#}'.equals('') ? '' : ' and o.idWFProcessoEvento in ($v{WFProcessoEvento_idWFProcessoEvento}) ';
+
+begin_transaction;
+
+sql_exec
+Update
+	WFFilatrabalho ft
+Set 
+	expirada = 'S',
+	dataexpiracao = '$v{dataAtual}',
+	horaexpiracao = '$v{dataAtual"datetime:HH:mm:ss"}',
+	idtarefaexecucaoexpiracao = $v{execId},
+
+	idwfatividaderealizada = a.idwfatividaderealizadaexpiracao, 
+	dataatividaderealizada = '$v{dataAtual}', 
+	horaatividaderealizada = '$v{dataAtual"datetime:HH:mm:ss"}',
+	idtarefaexecucaoatividaderealizada = $v{execId}
+From
+	wfocorrencia o
+	cross join wfatividade a
+Where
+	o.idwfocorrencia = ft.idwfocorrencia
+	and a.idwfatividade = ft.idwfatividade
+	and current_timestamp >= cast(ft.dataexpiracao||' '||ft.horaexpiracao as timestamp)
+	and ft.expirada = 'N'
+	and ft.idwfatividaderealizada is null
+	and a.idwfatividaderealizadaexpiracao is not null
+	$v{filtro_WFProcessoEvento_idWFProcessoEvento}
+;
+
+commit;
+
+# Finaliza as ocorrências
+$include{script:HEAVEN-wfg-finaliza-wfocorrencia-include}include
+
+# Gera fila de trabalho
+$include{
+	script:HEAVEN-wfg-gera-wffilatrabalho-sequencia-include, 
+	"execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento')",
+	"execScript.getValueVar('WFProcessoEvento_idWFProcessoEvento')"
+}include

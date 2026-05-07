@@ -1,0 +1,82 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFFilaTrabalho_idWFFilatrabalho}' as "WFFilaTrabalho_idWFFilatrabalho"
+	,'$v{WFFilaTrabalho_idWFOcorrencia}' as "WFFilaTrabalho_idWFOcorrencia"
+	,'$v{WFFilaTrabalho_idTarefaExecAtvRealizada}' as "WFFilaTrabalho_idTarefaExecAtvRealizada"
+save_rows(1,1);
+
+# Tarefa gera a próxima fila de trabalho
+
+set filtro_WFFilaTrabalho_idTarefaExecAtvRealizada = '$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}'.equals('') ? '' : ' and ft.idTarefaExecucaoAtividadeRealizada in ($v{WFFilaTrabalho_idTarefaExecAtvRealizada}) ';
+set filtro_WFFilaTrabalho_idWFFilatrabalho = '$v{WFFilaTrabalho_idWFFilatrabalho#}'.equals('') ? '' : ' and ft.idwffilatrabalho in ($v{WFFilaTrabalho_idWFFilatrabalho}) ';
+set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.equals('') ? '' : ' and o.idwfocorrencia in ($v{WFFilaTrabalho_idWFOcorrencia}) ';
+
+connect $v{ds_bridge};
+
+begin_transaction;
+
+	sql_exec 
+	INSERT INTO	WFFilatrabalho 
+				(idwfocorrencia, idwfatividade, idempresa, idwffilatrabalhoanterior, datainclusao, horainclusao, idtarefaexecucaoinclusao, dataexpiracao, horaexpiracao)
+	Select		idwfocorrencia, idwfatividade, idempresa, idwffilatrabalhoanterior, datainclusao, horainclusao, idtarefaexecucaoinclusao, dataexpiracao, horaexpiracao
+	From 	(
+		-- # Busca as ocorrências não finalizadas e as respectivas filas de trabalho
+		Select
+			o.idwfocorrencia
+			,a.idwfatividade
+			,o.idempresa
+			,ft.idwffilatrabalho as idwffilatrabalhoanterior
+			,'$v{dataAtual}'::date as datainclusao
+			,'$v{dataAtual"datetime:HH:mm:ss"}'::text as horainclusao
+			,$v{execId} as idtarefaexecucaoinclusao
+			,current_date + a.tempoexpiracao as dataexpiracao
+			,(Case when a.tempoexpiracao is not null then '00:00:00' end) as horaexpiracao
+
+			-- # Sequência de trabalho daquela ocorrência.
+			,dense_rank() over (partition by o.idwfocorrencia order by ft.idwffilatrabalho desc) as sequencia
+		From
+			wfocorrencia o
+			inner join wfprocessoevento pe on (pe.idwfprocessoevento = o.idwfprocessoevento)
+			inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+
+			-- # Houve alguma atividade realizada
+			inner join wfatividaderealizada ar on (ar.idwfatividaderealizada = ft.idwfatividaderealizada)
+			inner join wfatividade a on (a.idwfatividade = ar.idwfatividadeproxima)
+		Where
+			o.idwffilatrabalhofinalizacao is null -- # A ocorrência ainda não foi finalizada
+			and o.expirada = 'N' -- # A ocorrência ainda não expirou
+			and ar.tiposituacao = 'S'
+			and ar.idwfatividadeproxima is not null
+
+			-- # Para não duplicar as atividades, verifica se a proxima atividade ja foi inserida
+			and not exists (
+				Select	NULL
+				From	wffilatrabalho ft2
+				Where	ft2.idwffilatrabalhoanterior = ft.idwffilatrabalho
+						and ft2.idwfatividade = ar.idwfatividadeproxima
+						and ft2.idwfatividaderealizada is null
+			)
+
+			$v{filtro_WFFilaTrabalho_idTarefaExecAtvRealizada}
+			$v{filtro_WFFilaTrabalho_idWFFilatrabalho}
+			$v{filtro_WFFilaTrabalho_idWFOcorrencia}
+	) x
+	Where 
+		x.sequencia = 1 -- # Última fila de trabalho
+	;
+
+commit;

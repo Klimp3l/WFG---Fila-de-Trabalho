@@ -1,0 +1,311 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 28/04/2026 | Bernardo    | 			   | 38535   	 | Criação.
+
+~write_exec_log;
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+connect $v{ds_bridge};
+
+sql 
+Select
+	'$v{WFProcesso_idWFProcesso#}' as "WFProcesso_idWFProcesso"
+	,'$v{WFProcessoEvento_idWFProcessoEvento#}' as "WFProcessoEvento_idWFProcessoEvento"
+	,'$v{WFOcorrencia_apelidoTarefaEncaminhamento#}' as "WFOcorrencia_apelidoTarefaEncaminhamento"
+	,'$v{naoGerarOcorrenciaSemFinalizacao#false}' as "naoGerarOcorrenciaSemFinalizacao"
+	,'$v{empresa#}' as "empresa"
+	,'$v{ignorarEmpresa#false}' as "ignorarEmpresa"
+	,'$v{departamento#}' as "departamento"
+	,'$v{ignorarDepartamento#false}' as "ignorarDepartamento"
+	,'$v{setor#}' as "setor"
+	,'$v{ignorarSetor#false}' as "ignorarSetor"
+	,'$v{grupo#}' as "grupo"
+	,'$v{ignorarGrupo#false}' as "ignorarGrupo"
+	,'$v{familia#}' as "familia"
+	,'$v{ignorarFamilia#false}' as "ignorarFamilia"
+	,'$v{diasSemVenda#0}' as "diasSemVenda"
+	,'$v{utilizaMetaDiasSemVenda#false}' as "utilizaMetaDiasSemVenda"
+	,'$v{curvaABC#}' as "curvaABC"
+	,'$v{estoqueNegativo#false}' as "estoqueNegativo"
+	,'$v{estoquePositivo#false}' as "estoquePositivo"
+	,'$v{localEstoque#}' as "localEstoque"
+	,'$v{tipoLocalEstoque#}' as "tipoLocalEstoque"
+	,'$v{idMetaSemVendaDepartamento#}' as "idMetaSemVendaDepartamento"
+	,'$v{idMetaSemVendaSetor#}' as "idMetaSemVendaSetor"
+	,'$v{idMetaSemVendaGrupo#}' as "idMetaSemVendaGrupo"
+	,'$v{idMetaSemVendaFamilia#}' as "idMetaSemVendaFamilia"
+save_rows(1,1);
+
+######################
+# Filtros Ocorrência #
+set filtroOcorrencia = '$v{naoGerarOcorrenciaSemFinalizacao#false}'.equals("false") ? "" : """
+	and not exists (
+		Select 	null
+		From 	wfocorrencia o
+		Where 	o.expirada = 'N'
+				and o.idwffilatrabalhofinalizacao is null
+				and o.idempresa = e.idempresa	
+				and (o.chaves->>'idproduto')::bigint = p.idproduto
+				and o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+	)
+""";
+
+############################################################
+# Filtros de empresa, departamento, setor, grupo e família #
+set filtroEmpresa 				= '$v{empresa#}'.equals("") && '$v{ignorarEmpresa#false}'.equals("false") 			? "" : "and e.idempresa in ($v{empresa#})";
+set filtroIgnoraEmpresa 		= '$v{empresa#}'.equals("") && '$v{ignorarEmpresa#false}'.equals("true") 			? "and e.idempresa not in ($v{empresa#})" : "";
+set filtroDepartamento			= '$v{departamento#}'.equals("") && '$v{ignorarDepartamento#false}'.equals("false") 	? "" : "and p.iddepartamento in ($v{departamento#})";
+set filtroIgnoraDepartamento 	= '$v{departamento#}'.equals("") && '$v{ignorarDepartamento#false}'.equals("true") 	? "and p.iddepartamento not in ($v{departamento#})" : "";
+set filtroSetor 				= '$v{setor#}'.equals("") 	&& '$v{ignorarSetor#false}'.equals("false") 				? "" : "and p.idsetor in ($v{setor#})";
+set filtroIgnoraSetor 			= '$v{setor#}'.equals("") && '$v{ignorarSetor#false}'.equals("true") 				? "and p.idsetor not in ($v{setor#})" : "";
+set filtroGrupo 				= '$v{grupo#}'.equals("") && '$v{ignorarGrupo#false}'.equals("false") 				? "" : "and p.idgrupo in ($v{grupo#})";
+set filtroIgnoraGrupo 			= '$v{grupo#}'.equals("") && '$v{ignorarGrupo#false}'.equals("true") 				? "and p.idgrupo not in ($v{grupo#})" : "";
+set filtroFamilia 				= '$v{familia#}'.equals("") && '$v{ignorarFamilia#false}'.equals("false") 			? "" : "and p.idfamilia in ($v{familia#})";
+set filtroIgnoraFamilia 		= '$v{familia#}'.equals("") && '$v{ignorarFamilia#false}'.equals("true") 			? "and p.idfamilia not in ($v{familia#})" : "";
+
+#############################
+# Filtros de Dias Sem Venda #
+set filtroDiasSemVenda = '$v{diasSemVenda#0}'.equals("0") ? "" : "and exists (
+	Select 	null
+	From produtoresumo pr
+	Where
+		pr.idempresa = e.idempresa
+		and pr.idproduto = p.idproduto
+		and pr.dataultimavenda < (current_date - cast(coalesce($v{diasSemVenda#0}, mg.valor, ms.valor, md.valor) as integer))
+)";
+
+########################
+# Filtros de Curva ABC #
+set filtroCurvaABC = '$v{curvaABC#}'.equals("") ? "" : "and exists (
+	Select 	null
+	From classeproduto cp
+	Where
+		cp.idempresa = e.idempresa
+		and cp.idproduto = p.idproduto
+		and cp.idmercadologico = '0' /* Toda a loja */
+		and cp.tipoanalise = 'G' /* Qtde de Produtos Giro */
+		and cp.classe in ('$v{curvaABC#}')
+)";
+
+###########
+# Estoque #
+set filtroEstoqueNegativo = '$v{estoqueNegativo#false}'.equals("false") ? "" : "and sum(esa.quantidade) < 0.";
+set filtroEstoquePositivo = '$v{estoquePositivo#false}'.equals("false") ? "" : "and sum(esa.quantidade) > 0.";
+set filtroLocalEstoque = '$v{localEstoque#}'.equals("") ? "" : "and el.idlocalestoque in ($v{localEstoque#})";
+set filtroTipoLocalEstoque = '$v{tipoLocalEstoque#}'.equals("") ? "" : """
+	and (
+		Case 
+			when '$v{tipoLocalEstoque#}' = 'V'
+				then el.locavenda = 'S'
+			when '$v{tipoLocalEstoque#}' = 'C'
+				then el.locacompra = 'S'
+		End
+	)
+""";
+
+#########
+# Withs #
+set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
+	ultimoinventarioestoque as (
+		Select
+			x.*
+		From (
+			Select 
+				ie.datainventario,
+				p.idproduto,
+				p.idempresa,
+				iei.quantidadeestoque - iei.quantidadecontada ajustequantidade,
+				dense_rank() over(partition by iei.idproduto, ie.idempresa order by ie.datainventario desc, ie.idinventario) rk
+			From
+				produtoSelecionados p
+				inner join inventarioestoqueitem iei on (iei.idproduto = p.idproduto)
+				inner join inventarioestoque ie on (ie.idinventario = iei.idinventario and ie.idempresa = p.idempresa)
+			) x
+			Where
+				x.rk = 1 /* Último inventario de estoque */
+	),
+""" : "";
+
+###########
+# Colunas #
+set colunaEstoqueQuantidade = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? ",sum(esa.quantidade) estoquequantidade" : ",null as estoquequantidade";
+set colunaUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") ? """
+	'qtdultinventario', u.ajustequantidade,
+""" : "'qtdultinventario', null,";
+set colunaProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
+	'valorprecovenda', ppc.valorprecovenda,
+""" : "'valorprecovenda', null,";
+
+#########
+# Joins #
+set joinFiltroEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
+	inner join estoquesaldoatual esa on (esa.idempresa = e.idempresa and esa.idproduto = p.idproduto)
+	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
+""" : "";
+set joinFiltroDiasSemVenda = !"$v{filtroDiasSemVenda}".equals("") ? """
+	left outer join metamercadologico md on (md.idmeta = $v{idMetaSemVendaDepartamento#0} and md.idmercadologico = cast(p.iddepartamento as varchar(32))
+											and md.idempresa = e.idempresa and md.valor > 0. and current_date between md.datainicial and md.datafinal)
+	left outer join metamercadologico ms on (ms.idmeta = $v{idMetaSemVendaSetor#0} and ms.idmercadologico = cast(p.idsetor as varchar(32))
+											and ms.idempresa = e.idempresa and ms.valor > 0. and current_date between ms.datainicial and ms.datafinal)
+	left outer join metamercadologico mg on (mg.idmeta = $v{idMetaSemVendaGrupo#0} and mg.idmercadologico = cast(p.idgrupo as varchar(32))
+											and ms.idempresa = e.idempresa and mg.valor > 0. and current_date between mg.datainicial and mg.datafinal)
+	left outer join metamercadologico mf on (mf.idmeta = $v{idMetaSemVendaFamilia#0} and mf.idmercadologico = cast(p.idfamilia as varchar(32))
+											and ms.idempresa = e.idempresa and mg.valor > 0. and current_date between mg.datainicial and mg.datafinal)
+""" : "";
+set joinUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
+	left join ultimoinventarioestoque u on (u.idproduto = x.idproduto and u.idempresa = x.idempresa)
+""" : "";
+set joinProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
+	left join produtoprecocusto ppc on (ppc.idproduto = x.idproduto and ppc.idempresa = x.idempresa)
+""" : "";
+
+###################
+# SQL Ocorrências #
+###################
+
+connect $v{ds_bridge};
+
+sql_exec 
+With 
+	evento as (
+		Select
+			$v{WFProcessoEvento_idWFProcessoEvento} as idwfprocessoevento
+			,now() + (
+				select 
+					case pe.tipotempoexpiracao
+						when 'MINUTO' then pe.tempoexpiracao * interval '1 minute'
+						when 'HORA'   then pe.tempoexpiracao * interval '1 hour'
+						when 'DIA'    then pe.tempoexpiracao * interval '1 day'
+						when 'SEMANA' then pe.tempoexpiracao * interval '1 week'
+						when 'MES'    then pe.tempoexpiracao * interval '1 month'
+						else null
+					end
+				from wfprocessoevento pe
+				where pe.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+			) as datahoraexpiracao
+		From
+			wfprocessoevento pe
+		Where 
+			pe.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+	),
+	produtoSelecionados as (
+		Select
+			e.idempresa
+			,p.idproduto
+			,null as classificacao
+			,null as qtdeabastecimento
+			,null as ruptura
+			,null as qtdultinventario
+			,null as qtdproducaobandeja
+			,null as percentualabastecimento
+			,null as capacidade
+			,null as datavencimento
+			,null as dataprevisaosaida
+			$v{colunaEstoqueQuantidade}
+		From
+			produto p
+			cross join empresa e
+			$v{joinFiltroEstoque}
+			$v{joinFiltroDiasSemVenda}
+		Where
+			p.situacao = 'A'
+			and e.situacao = 'A'
+			and e.idempresa in ($v{empresas})
+
+			/* Não existe nenhuma ocorrência semelhante sem finalização */
+			and not exists (
+				Select 	null
+				From 	wfocorrencia o
+				Where 	o.expirada = 'N'
+						and o.idwffilatrabalhofinalizacao is null
+						and o.idempresa = e.idempresa
+						and (o.chaves->>'idproduto')::bigint = p.idproduto
+						and o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+			)
+			
+			/* Filtros Básicos */
+			$v{filtroEmpresa}
+			$v{filtroIgnoraEmpresa}
+			$v{filtroDepartamento}
+			$v{filtroIgnoraDepartamento}
+			$v{filtroSetor}
+			$v{filtroIgnoraSetor}
+			$v{filtroGrupo}
+			$v{filtroIgnoraGrupo}
+			$v{filtroFamilia}
+			
+			/* Filtros de Curva ABC */
+			$v{filtroCurvaABC}
+
+			/* Filtros de Dias Sem Venda */
+			$v{filtroDiasSemVenda}
+
+			/* Filtros de Estoque */
+			$v{filtroLocalEstoque}
+			$v{filtroTipoLocalEstoque}
+
+		Group by
+			e.idempresa
+			,p.idproduto
+
+		Having
+			1=1
+
+			/* Filtros de Estoque Negativo */
+			$v{filtroEstoqueNegativo}
+			$v{filtroEstoquePositivo}
+
+	),
+	$v{withUltimoInventarioEstoque}
+	ocorrencias as (
+		Select 
+			$v{WFProcessoEvento_idWFProcessoEvento} idwfprocessoevento
+			,x.idempresa
+			,jsonb_build_object('idproduto', x.idproduto) chaves
+			,'A' tipoinclusao
+			,'A' tipoencaminhamento
+			,'$v{WFOcorrencia_apelidoTarefaEncaminhamento}' apelidotarefaencaminhamento
+			,jsonb_build_object(
+				$v{colunaUltimoInventarioEstoque}
+				$v{colunaProdutoPrecoCusto}
+				'datavencimento', x.datavencimento,
+				'dataprevisaosaida', x.dataprevisaosaida,
+				'classificacao', x.classificacao,
+				'qtdeabastecimento', x.qtdeabastecimento,
+				'ruptura', x.ruptura,
+				'estoquequantidade', x.estoquequantidade,
+				'qtdultinventario', x.qtdultinventario,
+				'qtdproducaobandeja', x.qtdproducaobandeja,
+				'percentualabastecimento', x.percentualabastecimento,
+				'capacidade', x.capacidade
+			) valores
+			,current_date datainclusao
+			,cast(current_time as char(8)) horainclusao
+			,$v{idUsuario} idusuarioinclusao
+			,$v{execId} idtarefaexecucaoinclusao
+			/* Data e hora de expiração */
+			,evento.datahoraexpiracao::date as dataexpiracao
+			,evento.datahoraexpiracao::time as horaexpiracao
+		From
+			produtoSelecionados x
+			inner join evento on (evento.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento})
+			$v{joinUltimoInventarioEstoque}
+			$v{joinProdutoPrecoCusto}
+	)
+Insert into WFOcorrencia (idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao)
+Select 	idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao
+From 	ocorrencias
+;
+
+#################################
+# Gera fila de trabalho inicial #
+$include{
+	script:HEAVEN-wf-gera-wffilatrabalho-inicial-include, 
+	"execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento')",
+	"execScript.getValueVar('WFProcessoEvento_idWFProcessoEvento')"
+}include

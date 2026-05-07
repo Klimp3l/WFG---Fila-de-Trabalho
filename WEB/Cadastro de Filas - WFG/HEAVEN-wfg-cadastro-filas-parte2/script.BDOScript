@@ -1,0 +1,104 @@
+
+<script_function name="getEmpresas">
+	~not_save_exec;
+	set run = ''+execScript.getTarefaExecucao().setObs('GET - getEmpresas');
+	
+	connect $v{ds_bridge};
+	
+	$include{HEAVEN-sql-filtro-empresa-apelido, "", "1", "", "", "value", "label"}include
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlempresas')).append(']');
+</script_function>
+
+<script_function name="getMercadologicos">
+	~not_save_exec;
+	set run = ''+execScript.getTarefaExecucao().setObs('GET - getMercadologicos');
+
+	connect $v{ds_bridge};
+	
+	#######################  
+	# Busca os Parâmetros #   
+	####################### 
+	  
+	$include{HEAVEN-script-sql-filtro-departamento-vrs-2, ""}include
+	$include{HEAVEN-script-sql-filtro-setor-vrs-2, ""}include
+	$include{HEAVEN-script-sql-filtro-grupo-vrs-2, ""}include
+	$include{HEAVEN-script-sql-filtro-familia-vrs-2, ""}include
+	$include{HEAVEN-script-sql-filtro-subfamilia-vrs-2, ""}include
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('{');
+	$> sb.append('"departamentos": [').append(msgBuilder.sqlVarToJSON('sqldepartamentos')).append(']');
+	$> sb.append(',"setores": [').append(msgBuilder.sqlVarToJSON('sqlsetores')).append(']');
+	$> sb.append(',"grupos": [').append(msgBuilder.sqlVarToJSON('sqlgrupos')).append(']');
+	$> sb.append(',"familias": [').append(msgBuilder.sqlVarToJSON('sqlfamilias')).append(']');
+	$> sb.append('}');
+</script_function>
+
+<script_function name="getMetas">
+	~not_save_exec;
+    connect $v{ds_bridge};
+
+	$include{script:HEAVEN-sql-filtro-meta, "", ""}include
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlMetas')).append(']');
+</script_function>
+
+<script_function name="getLocalEstoque">
+	~not_save_exec;
+    connect $v{ds_bridge};
+	
+	$include{script:HEAVEN-sql-filtro-estoque-local, ""}include
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlEstoqueLocal')).append(']');
+</script_function>
+
+<script_function name="getProcessos">
+	~not_save_exec;
+	connect $v{ds_bridge};
+
+	sql 
+	Select
+		p.idwfprocesso as value
+		,p.descricao||' - '||p.idwfprocesso as label
+		,coalesce((
+			Select
+				json_agg(
+					json_build_object(
+						'value', pe.idwfprocessoevento,
+						'label', pe.descricao||' - '||pe.idwfprocessoevento
+					)
+				)
+			From
+				wfprocessoevento pe
+			Where
+				pe.idwfprocesso = p.idwfprocesso
+				and pe.situacao = 'A'
+		), '[]') as eventos
+	From
+		wfprocesso p
+	Where
+		p.situacao = 'A'
+	Order by
+		p.descricao asc
+	sql_var(sql) sql_props(lower_labels);
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sql')).append(']');
+</script_function>

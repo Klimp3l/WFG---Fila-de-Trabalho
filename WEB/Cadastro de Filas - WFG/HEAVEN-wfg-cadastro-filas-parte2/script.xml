@@ -1,0 +1,81 @@
+
+<script_content name="dialogDias">
+	<el-dialog title="Selecionar Dias do Mês" :visible.sync="dialogDiasVisible" width="30%">
+		<el-checkbox-group v-model="dialogDias.dias">
+    		<el-col :xs="8" :sm="8" :md="8" :lg="8" :xl="8" v-for="dia in $$store.dias" :key="dia.desc">
+    			<el-checkbox :label="dia.dia">{{dia.desc}}</el-checkbox>
+    		</el-col>
+  		</el-checkbox-group>
+  		<el-row>
+		</el-row>
+  		<span slot="footer" class="dialog-footer">
+	    	<el-button @click="dialogDiasVisible = false">Cancelar</el-button>
+	    	<el-button type="primary" @click="dialogDiasOK()">OK</el-button>
+	  	</span>
+	</el-dialog>
+</script_content>
+
+<script_content name="dialogMeses">
+	<el-dialog title="Selecionar Meses do Ano" :visible.sync="dialogMesesVisible" width="30%">
+		<el-checkbox-group v-model="dialogMeses.meses">
+    		<el-col :xs="8" :sm="8" :md="8" :lg="8" :xl="8" v-for="mes in $$store.meses" :key="mes.desc">
+    			<el-checkbox :label="mes.mes">{{mes.desc}}</el-checkbox>
+    		</el-col>
+  		</el-checkbox-group>
+  		<el-row>
+		</el-row>
+  		<span slot="footer" class="dialog-footer">
+	    	<el-button @click="dialogMesesVisible = false">Cancelar</el-button>
+	    	<el-button type="primary" @click="dialogMesesOK()">OK</el-button>
+	  	</span>
+	</el-dialog>
+</script_content>
+
+<script_content name="dialogAnos">
+	<el-dialog title="Selecionar Anos" :visible.sync="dialogAnosVisible" width="30%">
+		<el-checkbox-group v-model="dialogAnos.anos">
+    		<el-col :xs="8" :sm="8" :md="8" :lg="8" :xl="8" v-for="ano in $$store.anos" :key="ano.desc">
+    			<el-checkbox :label="ano.ano">{{ano.desc}}</el-checkbox>
+    		</el-col>
+  		</el-checkbox-group>
+  		<el-row>
+		</el-row>
+  		<span slot="footer" class="dialog-footer">
+	    	<el-button @click="dialogAnosVisible = false">Cancelar</el-button>
+	    	<el-button type="primary" @click="dialogAnosOK()">OK</el-button>
+	  	</span>
+	</el-dialog>
+</script_content>
+
+<script_content name="dialogDatas">
+	<el-dialog title="Selecionar Datas" :visible.sync="dialogDatasVisible" width="30%" @open="dialogDatasOpen()">
+		<el-date-picker ref="edit_select_dates" type="dates" v-model="dialogDatas.datas" format="dd/MM/yyyy" value-format="dd/MM/yyyy" @change="dialogDatasOK()" prefix-icon="x" style="width: 100%;">
+	</el-dialog>
+</script_content>
+
+<script_content name="dialogHorarios">
+	<el-dialog title="Selecionar Horários" :visible.sync="dialogHorariosVisible" width="30%">
+		<el-form label-width="70px" size="mini" class="demo-edit">
+			<el-form-item label="Intervalo">
+				<el-input-number v-model="dialogHorarios.intervalo" controls-position="right" :min="1" size="mini" style="width: 100px;"></el-input-number>
+				minutos
+			</el-form-item>
+			<el-form-item label="Entre">
+				<el-time-picker v-model="dialogHorarios.horaInicialHoraFinal" is-range range-separator="e" start-placeholder="Horário inicial" end-placeholder="Horário final" size="mini">
+				</el-time-picker>
+				<el-button type="primary" @click="dialogHorariosRefresh()" plain size="mini"><i class="el-icon-fa-refresh"></i></el-button>
+			</el-form-item>
+		</el-form>	
+		<el-checkbox-group v-model="dialogHorarios.horarios">
+    		<el-col :xs="8" :sm="8" :md="8" :lg="8" :xl="8" v-for="horario in dialogHorarios._horarios" :key="horario.desc">
+    			<el-checkbox :label="horario.horario">{{horario.desc}}</el-checkbox>
+    		</el-col>
+  		</el-checkbox-group>
+  		<el-row>
+		</el-row>
+  		<span slot="footer" class="dialog-footer">
+	    	<el-button @click="dialogHorariosVisible = false">Cancelar</el-button>
+	    	<el-button type="primary" @click="dialogHorariosOK()">OK</el-button>
+	  	</span>
+	</el-dialog>
+</script_content>

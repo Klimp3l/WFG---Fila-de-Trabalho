@@ -1,0 +1,23 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 05/05/2026 | Bernardo     |             |    38535    | Criação.
+
+~write_exec_log;
+
+# Parâmetros
+
+run_script_java_groovy HEAVEN-wf-finaliza-wfocorrencia-include;
+
+<script_java_groovy name="HEAVEN-wf-finaliza-wfocorrencia-include">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+
+	// # Finaliza as ocorrências
+	ExecScript execScriptChild = new ExecTarefa('HEAVEN-wfg-finaliza-wfocorrencia', execScript).getExecScriptChild();
+	execScriptChild.addVar('WFFilaTrabalho_idTarefaExecAtvRealizada', execScript.getValueVar('execId'));
+	execScriptChild.addVar('WFFilaTrabalho_idWFFilatrabalho', execScript.getValueVar('idWFFilatrabalho#'));
+	execScriptChild.addVar('WFFilaTrabalho_idWFOcorrencia', execScript.getValueVar('idWFOcorrencia#'));
+	execScriptChild.run();
+</script_java_groovy>
