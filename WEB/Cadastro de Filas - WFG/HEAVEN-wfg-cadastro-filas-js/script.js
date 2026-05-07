@@ -34,6 +34,7 @@ const vueDef = {
 				flowStatusTick: 0,
 				drawflowError: "",
 				drawflowEditor: null,
+				drawflowZoomLabel: "100%",
 				isImportingFlow: false,
 				flowByFila: {},
 				nodeFiltersByFila: {},
@@ -57,6 +58,7 @@ const vueDef = {
 							$> sb.append(scriptCurvaABCFilters());
 							$> sb.append(scriptDiasSemVendaFilters());
 							$> sb.append(scriptEstoqueNegativoFilters());
+							$> sb.append(scriptPontoExposicaoFilters());
 						]
 					},
 				]

@@ -31,6 +31,7 @@ Select
 	,'$v{diasSemVenda#0}' as "diasSemVenda"
 	,'$v{utilizaMetaDiasSemVenda#false}' as "utilizaMetaDiasSemVenda"
 	,'$v{curvaABC#}' as "curvaABC"
+	,'$v{estoqueZero#false}' as "estoqueZero"
 	,'$v{estoqueNegativo#false}' as "estoqueNegativo"
 	,'$v{estoquePositivo#false}' as "estoquePositivo"
 	,'$v{localEstoque#}' as "localEstoque"
@@ -39,6 +40,10 @@ Select
 	,'$v{idMetaSemVendaSetor#}' as "idMetaSemVendaSetor"
 	,'$v{idMetaSemVendaGrupo#}' as "idMetaSemVendaGrupo"
 	,'$v{idMetaSemVendaFamilia#}' as "idMetaSemVendaFamilia"
+	,'$v{estoqueZeroPontoExposicao#false}' as "estoqueZeroPontoExposicao"
+	,'$v{estoqueNegativoPontoExposicao#false}' as "estoqueNegativoPontoExposicao"
+	,'$v{estoquePositivoPontoExposicao#false}' as "estoquePositivoPontoExposicao"
+	,'$v{pontoExposicao#}' as "pontoExposicao"
 save_rows(1,1);
 
 ######################
@@ -94,6 +99,7 @@ set filtroCurvaABC = '$v{curvaABC#}'.equals("") ? "" : "and exists (
 
 ###########
 # Estoque #
+set filtroEstoqueZero = '$v{estoqueZero#false}'.equals("false") ? "" : "and sum(esa.quantidade) = 0.";
 set filtroEstoqueNegativo = '$v{estoqueNegativo#false}'.equals("false") ? "" : "and sum(esa.quantidade) < 0.";
 set filtroEstoquePositivo = '$v{estoquePositivo#false}'.equals("false") ? "" : "and sum(esa.quantidade) > 0.";
 set filtroLocalEstoque = '$v{localEstoque#}'.equals("") ? "" : "and el.idlocalestoque in ($v{localEstoque#})";
@@ -108,6 +114,13 @@ set filtroTipoLocalEstoque = '$v{tipoLocalEstoque#}'.equals("") ? "" : """
 	)
 """;
 
+######################
+# Ponto de Exposição #
+set filtroEstoqueZeroPontoExposicao = '$v{estoqueZeroPontoExposicao#false}'.equals("false") ? "" : "and sum(esa.quantidade) = 0.";
+set filtroEstoqueNegativoPontoExposicao = '$v{estoqueNegativoPontoExposicao#false}'.equals("false") ? "" : "and sum(esa.quantidade) < 0.";
+set filtroEstoquePositivoPontoExposicao = '$v{estoquePositivoPontoExposicao#false}'.equals("false") ? "" : "and sum(esa.quantidade) > 0.";
+set filtroPontoExposicao = '$v{pontoExposicao#}'.equals("") ? "" : "and el.idpontoexposicao in ($v{pontoExposicao#})";
+
 #########
 # Withs #
 set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
@@ -119,8 +132,8 @@ set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$
 				ie.datainventario,
 				p.idproduto,
 				p.idempresa,
-				iei.quantidadeestoque - iei.quantidadecontada ajustequantidade,
-				dense_rank() over(partition by iei.idproduto, ie.idempresa order by ie.datainventario desc, ie.idinventario) rk
+				iei.quantidadeestoque - iei.quantidadecontada as ajustequantidade,
+				dense_rank() over(partition by iei.idproduto, ie.idempresa order by ie.datainventario desc, ie.idinventario) as rk
 			From
 				produtoSelecionados p
 				inner join inventarioestoqueitem iei on (iei.idproduto = p.idproduto)
@@ -133,8 +146,13 @@ set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$
 
 ###########
 # Colunas #
-set colunaEstoqueQuantidade = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? ",sum(esa.quantidade) estoquequantidade" : ",null as estoquequantidade";
-set colunaUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") ? """
+set colunaEstoqueQuantidade = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
+	,sum(esa.quantidade) estoquequantidade
+""" : ",null as estoquequantidade";
+set colunaEstoquePontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals("") || !"$v{filtroEstoqueNegativoPontoExposicao}".equals("") || !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
+	,sum(ppe.quantidadeestoque) as estoquepontoexposicao
+""" : "null as estoquepontoexposicao";
+set colunaUltimoInventarioEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
 	'qtdultinventario', u.ajustequantidade,
 """ : "'qtdultinventario', null,";
 set colunaProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
@@ -143,9 +161,12 @@ set colunaProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
 
 #########
 # Joins #
-set joinFiltroEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
+set joinFiltroEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
 	inner join estoquesaldoatual esa on (esa.idempresa = e.idempresa and esa.idproduto = p.idproduto)
 	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
+""" : "";
+set joinProdutoPontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals("") || !"$v{filtroEstoqueNegativoPontoExposicao}".equals("") || !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
+	inner join produtopontoexposicao ppe on (ppe.idproduto = p.idproduto and ppe.idempresa = p.idempresa)
 """ : "";
 set joinFiltroDiasSemVenda = !"$v{filtroDiasSemVenda}".equals("") ? """
 	left outer join metamercadologico md on (md.idmeta = $v{idMetaSemVendaDepartamento#0} and md.idmercadologico = cast(p.iddepartamento as varchar(32))
@@ -157,7 +178,7 @@ set joinFiltroDiasSemVenda = !"$v{filtroDiasSemVenda}".equals("") ? """
 	left outer join metamercadologico mf on (mf.idmeta = $v{idMetaSemVendaFamilia#0} and mf.idmercadologico = cast(p.idfamilia as varchar(32))
 											and ms.idempresa = e.idempresa and mg.valor > 0. and current_date between mg.datainicial and mg.datafinal)
 """ : "";
-set joinUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
+set joinUltimoInventarioEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
 	left join ultimoinventarioestoque u on (u.idproduto = x.idproduto and u.idempresa = x.idempresa)
 """ : "";
 set joinProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
@@ -212,6 +233,7 @@ With
 			cross join empresa e
 			$v{joinFiltroEstoque}
 			$v{joinFiltroDiasSemVenda}
+			$v{joinProdutoPontoExposicao}
 		Where
 			p.situacao = 'A'
 			and e.situacao = 'A'
@@ -249,6 +271,9 @@ With
 			$v{filtroLocalEstoque}
 			$v{filtroTipoLocalEstoque}
 
+			/* Filtros de Estoque Ponto de Exposição */
+			$v{filtroPontoExposicao}
+
 		Group by
 			e.idempresa
 			,p.idproduto
@@ -256,9 +281,15 @@ With
 		Having
 			1=1
 
-			/* Filtros de Estoque Negativo */
+			/* Filtros de Estoque */
+			$v{filtroEstoqueZero}
 			$v{filtroEstoqueNegativo}
 			$v{filtroEstoquePositivo}
+
+			/* Filtros de Estoque Ponto de Exposição */
+			$v{filtroEstoqueZeroPontoExposicao}
+			$v{filtroEstoqueNegativoPontoExposicao}
+			$v{filtroEstoquePositivoPontoExposicao}
 
 	),
 	$v{withUltimoInventarioEstoque}
@@ -278,7 +309,7 @@ With
 				'classificacao', x.classificacao,
 				'qtdeabastecimento', x.qtdeabastecimento,
 				'ruptura', x.ruptura,
-				'estoquequantidade', x.estoquequantidade,
+				'estoquequantidade', coalesce(x.estoquequantidade, x.estoquepontoexposicao),
 				'qtdultinventario', x.qtdultinventario,
 				'qtdproducaobandeja', x.qtdproducaobandeja,
 				'percentualabastecimento', x.percentualabastecimento,

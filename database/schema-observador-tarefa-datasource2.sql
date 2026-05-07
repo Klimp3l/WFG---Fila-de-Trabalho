@@ -1,29 +1,3 @@
-CREATE TABLE Subprocesso (
-                idSubprocesso INTEGER NOT NULL,
-                descSubprocesso VARCHAR(128),
-                obs VARCHAR(1000),
-                versao INTEGER,
-                CONSTRAINT pk_subprocesso PRIMARY KEY (idSubprocesso)
-);
-
-
-CREATE INDEX ix_subprocesso_1
- ON Subprocesso
- ( descSubprocesso );
-
-CREATE TABLE Processo (
-                idProcesso INTEGER NOT NULL,
-                descProcesso VARCHAR(128),
-                obs VARCHAR(1000),
-                versao INTEGER,
-                CONSTRAINT pk_processo PRIMARY KEY (idProcesso)
-);
-
-
-CREATE INDEX ix_processo_1
- ON Processo
- ( descProcesso );
-
 CREATE TABLE Tarefa (
                 idTarefa INTEGER NOT NULL,
                 descTarefa VARCHAR(256),

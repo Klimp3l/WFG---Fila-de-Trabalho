@@ -14,6 +14,7 @@ const store = new Vue({
 			optionsFamilias: [],
 			optionsMetas: [],
 			optionsLocalEstoque: [],
+			optionsPontoExposicao: [],
 
 			loadingProcessos: false,
 			loadingEmpresas: false,
@@ -90,6 +91,17 @@ const store = new Vue({
 					})
 				});
 		},
+		getPontoExposicao() {
+			return this.$$service.get({}, { scriptFunction: 'getPontoExposicao' })
+				.then((response) => {
+					this.optionsPontoExposicao = response;
+				})
+				.always(() => {
+					this.$nextTick(function () {
+						this.loadingPontoExposicao = false;
+					})
+				});
+		},
 	},
 	created() {
 		
@@ -98,7 +110,8 @@ const store = new Vue({
 			this.getEmpresas(),
 			this.getMercadologicos(),
 			this.getMetas(),
-			this.getLocalEstoque()
+			this.getLocalEstoque(),
+			this.getPontoExposicao()
 		])
 		.catch((error) => {
 			console.error("Erro ao carregar opcoes iniciais:", error);
@@ -165,33 +178,89 @@ const store = new Vue({
 	});
 </script_content>
 
+
+<script_content name="scriptPontoExposicaoFilters">
+	{
+		label: "Ponto de Exposição",
+		items: [
+			{
+				label: "Estoque Zero",
+				value: "estoqueZeroPontoExposicao",
+				type: "checkbox",
+				placeholder: "Estoque Zero",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
+				label: "Estoque Negativo",
+				value: "estoqueNegativoPontoExposicao",
+				type: "checkbox",
+				placeholder: "Estoque Negativo",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
+				label: "Estoque Positivo",
+				value: "estoquePositivoPontoExposicao",
+				type: "checkbox",
+				placeholder: "Estoque Positivo",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
+				label: "Ponto de Exposição",
+				value: "pontoExposicao",
+				type: "select",
+				options: '$$store.optionsPontoExposicao',
+				multiple: true,
+				placeholder: "Selecione os pontos de exposição",
+				optional: true,
+				default: null,
+				disabled: false,
+			}
+		]
+	}
+</script_content>
+
 <script_content name="scriptEstoqueNegativoFilters">
 	{
-		label: "Estoque Negativo",
+		label: "Estoque",
 		items: [
+			{
+				label: "Estoque Zero",
+				value: "estoqueZero",
+				type: "checkbox",
+				placeholder: "Estoque Zero",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
 			{
 				label: "Estoque Negativo",
 				value: "estoqueNegativo",
 				type: "checkbox",
 				placeholder: "Estoque Negativo",
-				optional: false,
+				optional: true,
 				default: false,
-				disabled: true,
+				disabled: false,
 			},
 			{
 				label: "Estoque Positivo",
 				value: "estoquePositivo",
 				type: "checkbox",
 				placeholder: "Estoque Positivo",
-				optional: false,
+				optional: true,
 				default: false,
-				disabled: true,
+				disabled: false,
 			},
 			{
 				label: "Local de Estoque",
 				value: "localEstoque",
 				type: "select",
-				options: this.optionsLocalEstoque,
+				options: '$$store.optionsLocalEstoque',
 				multiple: true,
 				placeholder: "Selecione os locais de estoque",
 				optional: true,

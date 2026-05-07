@@ -135,17 +135,19 @@ $> sb.append("""<link rel="stylesheet" type="text/css"	href="odwctrl?action=exec
 			</div>
 			<div class="wfg-drawflow-editor-wrap" v-show="!drawflowError">
 				<div id="drawflowEditor" class="wfg-drawflow-editor"></div>
-				<button
-					type="button"
-					class="wfg-drawflow-fit-btn"
-					@click="fitFlowToView"
-					:disabled="!selectedRow || !selectedRow.id"
-					title="Enquadrar nós"
-				>
-					<i class="fa-solid fa-arrows-to-eye"></i>
-				</button>
+				<div class="wfg-drawflow-bar-zoom" role="group" aria-label="Controles de zoom do fluxo">
+					<button type="button" class="wfg-drawflow-zoom-btn" @click="zoomOutDrawflow" title="Diminuir zoom">
+						<i class="fa-solid fa-magnifying-glass-minus"></i>
+					</button>
+					<button type="button" class="wfg-drawflow-zoom-btn wfg-drawflow-zoom-label" @click="zoomResetDrawflow" title="Resetar zoom para 100%">
+						{{ drawflowZoomLabel }}
+					</button>
+					<button type="button" class="wfg-drawflow-zoom-btn" @click="zoomInDrawflow" title="Aumentar zoom">
+						<i class="fa-solid fa-magnifying-glass-plus"></i>
+					</button>
+				</div>
 			</div>
-			<div id="drawflow"></div>
+			<!-- <div id="drawflow"></div> -->
 		</section>
 
 		<aside class="wfg-panel">
@@ -158,30 +160,12 @@ $> sb.append("""<link rel="stylesheet" type="text/css"	href="odwctrl?action=exec
 						<span v-if="sidePanelTask" class="wfg-tag">{{ sidePanelTask.nome }}</span>
 						<span v-if="sidePanelTask" class="wfg-tag">{{ sidePanelTask.apelido }}</span>
 					</div>
-					<p v-if="!sidePanelTask" class="wfg-side-hint">Esta tarefa não possui catálogo de filtros configurado no studio.</p>
-					<el-form v-else label-position="top" size="small" class="wfg-side-filters">
-							<el-cst-line-title v-show="sidePanelTask && sidePanelTask.filters && sidePanelTask.filters.length > 0">Filtros</el-cst-line-title>                        <el-collapse accordion>
-                            <el-collapse-item v-for="(grp, gi) in sidePanelTask.filters" :title="grp.label" :name="'g'+gi" :key="'g'+gi">
-                                <!-- <el-cst-line-title :key="'g'+gi">{{  }}</el-cst-line-title> -->
-                                <template v-for="(it, ii) in grp.items">
-                                    <el-form-item v-if="filterItemVisible(it) && it.type==='checkbox'" :key="'i'+gi+'_'+ii" label=" ">
-                                        <el-checkbox v-model="sidePanelValues[it.key || it.value]" @change="syncSidePanelToStore">{{ it.label }}</el-checkbox>
-                                    </el-form-item>
-                                    <el-form-item v-else-if="filterItemVisible(it) && it.type==='number'" :key="'i'+gi+'_'+ii" :label="it.label">
-                                        <el-input-number v-model="sidePanelValues[it.key || it.value]" controls-position="right" :min="it.min" style="width:100%;" @change="syncSidePanelToStore"></el-input-number>
-                                    </el-form-item>
-                                    <el-form-item v-else-if="filterItemVisible(it) && it.type==='select'" :key="'i'+gi+'_'+ii" :label="it.label">
-                                        <el-select v-model="sidePanelValues[it.key || it.value]" :multiple="it.multiple" filterable clearable :placeholder="it.placeholder || ''" style="width:100%;" @change="syncSidePanelToStore">
-                                            <el-option v-for="opt in resolveFilterOptions(it)" :key="opt.value" :label="opt.label" :value="opt.value"></el-option>
-                                        </el-select>
-                                    </el-form-item>
-                                    <el-form-item v-else-if="filterItemVisible(it)" :key="'i'+gi+'_'+ii" :label="it.label">
-                                        <el-input v-model="sidePanelValues[it.key || it.value]" :placeholder="it.placeholder || ''" @change="syncSidePanelToStore"></el-input>
-                                    </el-form-item>
-                                </template>
-                            </el-collapse-item>
-                        </el-collapse>
-					</el-form>
+					<wfg-node-filters-panel
+						:task="sidePanelTask"
+						:values="sidePanelValues"
+						:resolve-options="resolveFilterOptions"
+						@change="syncSidePanelToStore"
+					></wfg-node-filters-panel>
 				</template>
 			</section>
 		</aside>

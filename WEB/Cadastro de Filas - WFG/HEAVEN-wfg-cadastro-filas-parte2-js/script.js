@@ -1,3 +1,116 @@
+$> sb.append(nodeFiltersComponents());
+
+<script_content name="nodeFiltersComponents">
+Vue.component("wfg-node-filters-generic", {
+	props: {
+		task: {
+			type: Object,
+			required: true
+		},
+		values: {
+			type: Object,
+			required: true
+		},
+		resolveOptions: {
+			type: Function,
+			required: true
+		}
+	},
+	methods: {
+		getItemKey(it) {
+			return (it && (it.key || it.value)) || "";
+		},
+		itemVisible(it) {
+			const cond = it ? it.vShow : null;
+			if (!cond) {
+				return true;
+			}
+			return !!this.values[cond];
+		},
+		itemOptions(it) {
+			if (typeof this.resolveOptions !== "function") {
+				return [];
+			}
+			return this.resolveOptions(it) || [];
+		},
+		notifyChange() {
+			this.$emit("change");
+		}
+	},
+	template: `
+		<el-form label-position="top" size="small" class="wfg-side-filters">
+			<el-cst-line-title v-show="task && task.filters && task.filters.length > 0">Filtros</el-cst-line-title>
+			<el-collapse accordion>
+				<el-collapse-item v-for="(grp, gi) in task.filters" :title="grp.label" :name="'g'+gi" :key="'g'+gi">
+					<template v-for="(it, ii) in grp.items">
+						<el-form-item v-if="itemVisible(it)" :key="'i'+gi+'_'+ii" :label="it.type==='checkbox' ? ' ' : it.label">
+							<el-checkbox v-if="it.type==='checkbox'" v-model="values[getItemKey(it)]" :disabled="!!it.disabled" @change="notifyChange">{{ it.label }}</el-checkbox>
+							<el-input-number v-else-if="it.type==='number'" v-model="values[getItemKey(it)]" controls-position="right" :min="it.min" :disabled="!!it.disabled" style="width:100%;" @change="notifyChange"></el-input-number>
+							<el-select v-else-if="it.type==='select'" v-model="values[getItemKey(it)]" :multiple="it.multiple" filterable clearable :placeholder="it.placeholder || ''" :disabled="!!it.disabled" style="width:100%;" @change="notifyChange">
+								<el-option v-for="opt in itemOptions(it)" :key="opt.value" :label="opt.label" :value="opt.value"></el-option>
+							</el-select>
+							<el-input v-else v-model="values[getItemKey(it)]" :placeholder="it.placeholder || ''" :disabled="!!it.disabled" @change="notifyChange"></el-input>
+						</el-form-item>
+					</template>
+				</el-collapse-item>
+			</el-collapse>
+		</el-form>
+	`
+});
+
+Vue.component("wfg-node-filters-panel", {
+	props: {
+		task: {
+			type: Object,
+			default: null
+		},
+		values: {
+			type: Object,
+			required: true
+		},
+		resolveOptions: {
+			type: Function,
+			required: true
+		}
+	},
+	computed: {
+		activeAlias() {
+			if (!this.task) {
+				return "";
+			}
+			return String(this.task.apelido || "");
+		}
+	},
+	methods: {
+		resolvePanelComponent(alias) {
+			const normalized = String(alias || "");
+			const registry = {
+				"HEAVEN-wfg-gera-ocorrencia-generica": "wfg-node-filters-generic"
+			};
+			return registry[normalized] || "wfg-node-filters-generic";
+		},
+		notifyChange() {
+			this.$emit("change");
+		}
+	},
+	template: `
+		<div class="wfg-node-filters-panel">
+			<keep-alive>
+				<component
+					v-if="task && task.filters && task.filters.length > 0"
+					:is="resolvePanelComponent(activeAlias)"
+					:key="activeAlias"
+					:task="task"
+					:values="values"
+					:resolve-options="resolveOptions"
+					@change="notifyChange"
+				></component>
+			</keep-alive>
+			<p v-if="!task || !task.filters || task.filters.length === 0" class="wfg-side-hint">Esta tarefa não possui catálogo de filtros configurado no studio.</p>
+		</div>
+	`
+});
+</script_content>
 
 <script_content name="drawflowJs">
 	ensureDrawflowEditor() {
@@ -16,6 +129,15 @@
 		this.drawflowEditor = new Drawflow(container);
 		this.drawflowEditor.reroute = true;
 		this.drawflowEditor.start();
+		// Drawflow depende de classList[0] === "parent-drawflow" para pan no fundo do editor.
+		// Reanexa a classe visual para manter "parent-drawflow" como primeira classe.
+		container.classList.remove("wfg-drawflow-editor");
+		container.classList.add("wfg-drawflow-editor");
+		this.drawflowEditor.on("zoom", (zoomValue) => {
+			const safeZoom = (typeof zoomValue === "number" && isFinite(zoomValue)) ? zoomValue : 1;
+			this.drawflowZoomLabel = `${Math.round(safeZoom * 100)}%`;
+		});
+		this.drawflowZoomLabel = `${Math.round(((this.drawflowEditor.zoom || 1) * 100))}%`;
 		this.protectStartNodeRemoval();
 
 		const onChange = () => this.handleFlowChanged();
@@ -44,89 +166,23 @@
 		
 		return true;
 	},
-	getNodeBoundsForFit(moduleData, container) {
-		const data = moduleData || {};
-		const nodeIds = Object.keys(data);
-		if (!nodeIds.length) {
-			return null;
+	zoomInDrawflow() {
+		if (!this.ensureDrawflowEditor()) {
+			return;
 		}
-		let minX = Number.POSITIVE_INFINITY;
-		let minY = Number.POSITIVE_INFINITY;
-		let maxX = Number.NEGATIVE_INFINITY;
-		let maxY = Number.NEGATIVE_INFINITY;
-		nodeIds.forEach((nodeId) => {
-			const node = data[nodeId] || {};
-			const posX = Number(node.pos_x || 0);
-			const posY = Number(node.pos_y || 0);
-			let nodeWidth = 220;
-			let nodeHeight = 90;
-			if (container && container.querySelector) {
-				const nodeEl = container.querySelector(`#node-${nodeId}`);
-				if (nodeEl) {
-					nodeWidth = nodeEl.offsetWidth || nodeWidth;
-					nodeHeight = nodeEl.offsetHeight || nodeHeight;
-				}
-			}
-			minX = Math.min(minX, posX);
-			minY = Math.min(minY, posY);
-			maxX = Math.max(maxX, posX + nodeWidth);
-			maxY = Math.max(maxY, posY + nodeHeight);
-		});
-		if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
-			return null;
-		}
-		return { minX, minY, maxX, maxY };
+		this.drawflowEditor.zoom_in();
 	},
-	applyDrawflowTransform(zoom, canvasX, canvasY) {
-		if (!this.drawflowEditor || !this.drawflowEditor.precanvas) {
+	zoomOutDrawflow() {
+		if (!this.ensureDrawflowEditor()) {
 			return;
 		}
-		this.drawflowEditor.zoom = zoom;
-		this.drawflowEditor.canvas_x = canvasX;
-		this.drawflowEditor.canvas_y = canvasY;
-		this.drawflowEditor.precanvas.style.transform = `translate(${canvasX}px, ${canvasY}px) scale(${zoom})`;
+		this.drawflowEditor.zoom_out();
 	},
-	fitFlowToView() {
-		if (!this.selectedRow || !this.selectedRow.id || !this.ensureDrawflowEditor()) {
+	zoomResetDrawflow() {
+		if (!this.ensureDrawflowEditor()) {
 			return;
 		}
-		const container = document.getElementById("drawflowEditor");
-		if (!container) {
-			return;
-		}
-		const flowDefinition = this.exportCurrentFlow();
-		const moduleData = this.getCurrentModuleData(flowDefinition);
-		const bounds = this.getNodeBoundsForFit(moduleData, container);
-		if (!bounds) {
-			if (typeof this.drawflowEditor.zoom_reset === "function") {
-				this.drawflowEditor.zoom_reset();
-			}
-			return;
-		}
-		const padding = 40;
-		const viewportWidth = Math.max((container.clientWidth || 0) - (padding * 2), 1);
-		const viewportHeight = Math.max((container.clientHeight || 0) - (padding * 2), 1);
-		const contentWidth = Math.max(bounds.maxX - bounds.minX, 1);
-		const contentHeight = Math.max(bounds.maxY - bounds.minY, 1);
-		const ratioX = viewportWidth / contentWidth;
-		const ratioY = viewportHeight / contentHeight;
-		const minZoom = this.drawflowEditor.zoom_min || 0.2;
-		const maxZoom = this.drawflowEditor.zoom_max || 1.6;
-		let targetZoom = Math.min(ratioX, ratioY);
-		if (!isFinite(targetZoom) || targetZoom <= 0) {
-			targetZoom = 1;
-		}
-		targetZoom = Math.max(minZoom, Math.min(maxZoom, targetZoom));
-		const boundsCenterX = bounds.minX + (contentWidth / 2);
-		const boundsCenterY = bounds.minY + (contentHeight / 2);
-		const canvasX = (container.clientWidth / 2) - (boundsCenterX * targetZoom);
-		const canvasY = (container.clientHeight / 2) - (boundsCenterY * targetZoom);
-		this.applyDrawflowTransform(targetZoom, canvasX, canvasY);
-	},
-	scheduleFitFlowToView() {
-		this.$nextTick(() => {
-			setTimeout(() => this.fitFlowToView(), 0);
-		});
+		this.drawflowEditor.zoom_reset();
 	},
 	getCurrentModuleName() {
 		return (this.drawflowEditor && this.drawflowEditor.module) ? this.drawflowEditor.module : "Home";
@@ -525,7 +581,6 @@
 			}
 			this.importFlowToEditor(this.flowByFila[key]);
 			this.ensureDefaultNodesForNewRow();
-			this.scheduleFitFlowToView();
 		});
 	},
 	syncCurrentFlowInMemory() {
@@ -733,13 +788,6 @@
 		});
 		return out;
 	},
-	filterItemVisible(it) {
-		const cond = it["vShow"];
-		if (!cond) {
-			return true;
-		}
-		return !!this.sidePanelValues[cond];
-	},
 </script_content>
 
 <script_content name="drawflowJs3">
@@ -871,16 +919,18 @@
 			return;
 		}
 		const aliases = [
-			"HEAVEN-wf-expira-wfocorrencia",
-			"HEAVEN-wf-expira-wffilatrabalho"
+			"HEAVEN-wfg-expira-wfocorrencia",
+			"HEAVEN-wfg-expira-wffilatrabalho"
 		];
+		const defaultNodeStartX = 370;
+		const defaultNodeSpacingX = 320;
 		let moduleData = this.getCurrentModuleData(this.exportCurrentFlow());
 		const nodeIds = [];
 		for (let i = 0; i < aliases.length; i++) {
 			const alias = aliases[i];
 			let nodeId = this.findNodeIdByAlias(moduleData, alias);
 			if (!nodeId) {
-				nodeId = this.addDefaultTaskNode(alias, 330 + (i * 260), 120);
+				nodeId = this.addDefaultTaskNode(alias, defaultNodeStartX + (i * defaultNodeSpacingX), 120);
 				moduleData = this.getCurrentModuleData(this.exportCurrentFlow());
 			}
 			if (nodeId) {

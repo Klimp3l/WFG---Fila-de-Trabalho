@@ -59,13 +59,36 @@
 	~not_save_exec;
     connect $v{ds_bridge};
 	
-	$include{script:HEAVEN-sql-filtro-estoque-local, ""}include
+	$include{script:HEAVEN-sql-filtro-estoque-local, "", "", "value", "label"}include
 
 	<!--output-->
 	$> msgBuilder.setContentType('application/json');
 	$> msgBuilder.setContentEncoding('gzip');
 	$> msgBuilder.setCharset('UTF-8');
 	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlEstoqueLocal')).append(']');
+</script_function>
+
+<script_function name="getPontoExposicao">
+	~not_save_exec;
+    connect $v{ds_bridge};
+	
+	sql 
+	Select
+		p.idpontoexposicao as value
+		,p.descricao as label
+	From
+		pontoexposicao p
+	Where 
+		p.situacao = 'A'
+	Order by
+		p.descricao asc
+	sql_var(sqlPontoExposicao);
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlPontoExposicao')).append(']');
 </script_function>
 
 <script_function name="getProcessos">
