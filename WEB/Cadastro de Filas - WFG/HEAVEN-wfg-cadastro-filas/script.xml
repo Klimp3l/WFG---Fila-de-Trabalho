@@ -1,400 +1,383 @@
-# versao 1.0
-#
-# Alterações:
-# |    Data    | Programador | Solicitante | Caso Mantis | Descrição
-# | 27/04/2026 | Bernardo    | IANDev      |             | Criação da estrutura inicial do cadastro WEB de filas WFG.
+$> import com.elisha.commons.util.CryptUtil;
+$> msgBuilder.setContentEncoding('gzip');
+$> msgBuilder.setCharset('UTF-8');
+$> msgBuilder.setReplaceVarsOnTemplate(true);
+$> msgBuilder.setHtmlTemplates('$v{embedded#}'.equals('true') ? 'element-crud-1.html' : 'element-crud-1.html');
+$> msgBuilder.setContentSections('css', 'body', 'js');
 
-// Auxiliares: getProcessos, getEmpresas, getMercadologicos
-$include{script:HEAVEN-wfg-cadastro-filas-parte2}include
+$> sb.append("""<link rel="stylesheet" type="text/css"href="odwctrl?action=execTarefa&apelido=element-ui-crud-base-css&tKey=${CryptUtil.getHexHash('#element-ui-crud-base-css.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}" />\n\n""");
+$> sb.append("""<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap"rel="stylesheet">\n""");
+$> sb.append("""<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.css">\n""");
+$> sb.append("""<link rel="stylesheet" type="text/css"	href="odwctrl?action=execTarefa&apelido=$v{apelido}-css&tKey=${CryptUtil.getHexHash('#$v{apelido}.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}" />\n\n""");
 
-<script_function name="getList">
-	~write_exec_log;
-	set run = ''+execScript.getTarefaExecucao().setObs('getList - $v{usuario}');
 
-	set filtroId = '$v{id#}'.equals('') ? '' : ' and t.idtarefa = $v{id}';
-	set filtroDescricao = '$v{descricao#}'.equals('') ? '' : " and upper(t.descricao) like upper('%$v{descricao}%')";
-	set filtroSituacao = '$v{situacao#}'.equals('') ? '' : " and coalesce(t.situacao = '$v{situacao}'";
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v7.0.0/css/all.css" crossorigin="anonymous">
 
-	set sort = "order by $v{order#1}";
-	set sort = '$v{sort}'.replace('null', '1');
-	set offset = ($v{pageIndex#1}-1) * $v{pageSize#20};
+<!--section-->
 
-	connect $v{datasource2};
+<div id="app" class="wfg-app">
+<!--	<aside class="wfg-sidebar">-->
+<!--		<div class="wfg-brand">-->
+<!--			<span class="wfg-brand-dot"></span>-->
+<!--			<span>WFG Studio</span>-->
+<!--		</div>-->
+<!--		<div class="wfg-nav-item active">Filas</div>-->
+<!--		<div class="wfg-nav-item">Tarefas</div>-->
+<!--		<div class="wfg-nav-item">Filtros</div>-->
+<!--		<div class="wfg-nav-item">Execuções</div>-->
+<!--		<div class="wfg-nav-item">Logs e Auditoria</div>-->
+<!--	</aside>-->
 
-	sql 
-	Select 
-		t.apelido
-		,t.desctarefa as descricao
-		,t.idtarefa
-		,Case when t.situacao = 0 then 'A' else 'I' end as situacao
-		,t.apelido, t.tipodias, t.diassemana, t.dias, t.meses, t.anos, t.datas, t.tipohorarios, t.tipointervalo, t.intervalo, t.horainicial, t.horafinal, t.horarios
-		,t.scriptAcao
-	From 
-		Tarefa t
-	Where
-		t.apelido like 'CLIENTE-wfg-%-execucao'
-	sql_var(sqlMemoriaTarefas) no_exec;
+	<section class="wfg-main" id="vueTable">
+		<div class="wfg-topbar">
+			<div class="wfg-title">
+				<h1>Cadastro de Filas WFG</h1>
+			</div>
+			<div class="wfg-actions">
+				<button class="wfg-btn primary" @click="openInsert">
+					<i class="el-icon-fa-plus"></i><span> Incluir</span>
+				</button>
+			</div>
+		</div>
 
-	connect $v{ds_bridge};
+		<el-card shadow="never" class="box-card el-cst-crud-card wfg-surface">
+			<el-form ref="formFilter" :model="filterModel" :inline="true" size="medium" class="demo-form-inline"
+				@submit.native.prevent>
+				<el-row :gutter="14">
+					<el-col :xs="24" :sm="24" :md="10" :lg="10" :xl="10">
+						<el-form-item label="Descrição">
+							<el-input ref="filter_descricao" v-model="filterModel.descricao"
+								placeholder="Pesquisar pela descrição da fila"
+								@keyup.enter.native="filter(true)"></el-input>
+						</el-form-item>
+					</el-col>
+					<el-col :xs="24" :sm="24" :md="4" :lg="4" :xl="4">
+						<el-form-item label="ID">
+							<el-input v-model="filterModel.id" placeholder="ID da fila"
+								@keyup.enter.native="filter(true)"></el-input>
+						</el-form-item>
+					</el-col>
+					<el-col :xs="24" :sm="24" :md="4" :lg="4" :xl="4">
+						<el-form-item label="Situação">
+							<el-select v-model="filterModel.situacao">
+								<el-option label="Ativo" value="A"></el-option>
+								<el-option label="Inativo" value="I"></el-option>
+								<el-option label="Todas" value=""></el-option>
+							</el-select>
+						</el-form-item>
+					</el-col>
+					<el-col :xs="24" :sm="24" :md="6" :lg="6" :xl="6">
+						<div class="wfg-filter-actions">
+							<el-form-item><br>
+								<button class="wfg-btn primary" @click="filter">
+									<i class="el-icon-fa-filter"></i><span> Filtrar</span>
+								</button>
+								<button class="wfg-btn warning" @click="reset()">
+									<i class="el-icon-fa-eraser"></i><span> Limpar</span>
+								</button>
+							</el-form-item>
+						</div>
+					</el-col>
+				</el-row>
+			</el-form>
 
-	#####################
-	# Uso padrão de arquivo temporário Postgres
-	#####################
-	set sufixo = "$v{idTarefa}_$v{execId}";
-	set tabletmp = "temp_$v{sufixo}";
+			<el-search-table-pagination ref="table" :fetch="fetch" @sort-change="onSortChange"
+				@current-change="onCurrentChange" :stripe=false :border=false :highlight-current-row=true row-key="id"
+				list-field="list" total-field="total" :page-sizes="[5,10,25,50,100]" :params="filterModel"
+				:columns="$options.columns">
+				<template slot-scope="scope" slot="rowIndex">
+					{{ scope.$index }}
+				</template>
+				<template slot-scope="scope" slot="ativo">
+					<el-switch v-model="scope.row.situacao" :active-value="'A'" :disabled="true"></el-switch>
+				</template>
+			</el-search-table-pagination>
+		</el-card>
 
-	sql_exec create temporary table $v{tabletmp} (
-		apelido varchar(256) not null
-		,descricao varchar(256) not null
-		,idtarefa integer not null
-		,situacao varchar(1) not null
-		,tipodias integer not null
-		,diassemana varchar(7) not null
-		,dias varchar(31) not null
-		,meses varchar(13) not null
-		,anos varchar(21) not null
-		,datas varchar(31) not null
-		,tipohorarios integer not null
-		,tipointervalo integer not null
-		,intervalo integer not null
-		,horainicial varchar(8) not null
-		,horafinal varchar(8) not null
-		,horarios varchar(64000) not null
-		,scriptAcao varchar(256) not null
-	);
+		<div class="wfg-topbar">
+			<div class="wfg-title">
+				<h1 v-if="selectedRow && selectedRow.id">Fila: <strong>{{ selectedRow.descricao }}</strong></h1>
+				<p v-else><strong>Selecione uma fila para visualizar os detalhes</strong></p>
+			</div>
+			<div class="wfg-actions">
+				<button v-if="selectedRow && selectedRow.id" class="wfg-btn success" @click="openEdit">
+					<i class="el-icon-fa-edit"></i><span> Editar</span>
+				</button>
+				<button v-if="selectedRow && selectedRow.id" class="wfg-btn warning" @click="openCopy">
+					<i class="el-icon-fa-copy"></i><span> Copiar</span>
+				</button>
+			</div>
+		</div>
 
-	sql_insert_by_column_names sqlMemoriaTarefas into $v{tabletmp} (APELIDO, DESCRICAO, IDTAREFA, SITUACAO, TIPODIAS, DIASSEMANA, DIAS, MESES, ANOS, DATAS, TIPOHORARIOS, TIPOINTERVALO, INTERVALO, HORAINICIAL, HORAFINAL, HORARIOS, SCRIPTACAO);
+		<section class="wfg-kpis" v-show="selectedRow && selectedRow.id">
+			<article class="wfg-kpi"><span>Total de Nós</span><strong>{{ nodeCountSelected }}</strong></article>
+			<article class="wfg-kpi"><span>Execuções 24h</span><strong>0</strong></article>
+			<article class="wfg-kpi"><span>Falhas 24h</span><strong>0</strong></article>
+		</section>
 
-	sql
-	Select
-		t.idtarefa as id
-		,t.apelido as apelido
-		,t.descricao as descricao
-		,t.situacao as situacao
-		,t.tipodias as "tipoDias"
-		,t.diassemana as "diasSemana"
-		,t.dias as dias
-		,t.meses as meses
-		,t.anos as anos
-		,t.datas as datas
-		,t.tipohorarios as "tipoHorarios"
-		,t.tipointervalo as "tipoIntervalo"
-		,t.intervalo as intervalo
-		,t.horainicial as "horaInicial"
-		,t.horafinal as "horaFinal"
-		,t.horarios as horarios
-		,t.scriptAcao as "scriptAcao"
-		,cast(coalesce(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcesso_idWFProcesso', '') as integer) as idwfprocesso
-		,coalesce(p.descricao, '') as wfprocessodescricao
-		,cast(coalesce(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento', '') as integer) as idwfprocessoevento
-		,coalesce(pe.descricao, '') as wfprocessoeventodescricao
-		,coalesce(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento', '') as apelidotarefaencaminhamento
-		,coalesce(nullif(ctFlow.valor::jsonb->>'flowjson', ''), ctFlow.valor, '') as flowjson
-		,coalesce(ctFlow.valor::jsonb->>'nodefiltersjson', '{}') as nodefiltersjson
-	From
-		$v{tabletmp} t
-		left join configtarefa ct on (ct.apelidotarefa = t.apelido and ct.chave = 'CLIENTE-wfg-cfg')
-		left join configtarefa ctFlow on (ctFlow.apelidotarefa = t.apelido and ctFlow.chave = 'CLIENTE-wfg-cfg-drawFlow')
-		left join wfprocesso p on (p.idwfprocesso = nullif(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcesso_idWFProcesso', '')::integer)
-		left join wfprocessoevento pe on (pe.idwfprocessoevento = nullif(ct.valor::jsonb->>'CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento', '')::integer)
-	sql_var(sql_base) no_exec;
-
-	sql
-	Select
-		*
-	From
-		($v{sql_base}) x
-	$v{sort}
-	sql_var(sql) sql_props(limit="$v{pageSize#20}" offset="$v{offset}")
-	;
-
-	sql
-	Select
-		count(*) as total
-	From
-		($v{sql_base}) x
-	;
-
-	<!--output-->
-	$> msgBuilder.setContentType('application/json');
-	$> msgBuilder.setContentEncoding('gzip');
-	$> msgBuilder.setCharset('UTF-8');
-	$> msgBuilder.setHeader('total', '$c{total}');
-	$> sb.append('{ "total": $c{total}, "list": [').append(msgBuilder.sqlVarToJSON('sql')).append('] }');
-</script_function>
-
-<script_function name="save">
-	not_save_exec;
-	~write_exec_log;
-	set run = ''+execScript.getTarefaExecucao().setObs('save - $v{usuario}');
-
-	connect $v{ds_bridge};
-
-	run_script_java_groovy save -> var: response;
-
-	<script_java_groovy name="save">
-		import java.util.List;
-		import java.util.ArrayList;
-		import javax.persistence.EntityManager;
-		import groovy.json.JsonSlurper;
-		import bdo.dao.TarefaDAO;
-		import bdo.dao.ProcessoDAO;
-		import bdo.dao.SubprocessoDAO;
-		import bdo.entity.Tarefa;
-		import bdo.entity.Processo;
-		import bdo.entity.Subprocesso;
-		import bdo.util.SQLUtilX;
-		import com.elisha.commons.util.StringUtil;
-		import com.elisha.commons.util.ArrayUtil;
-		import groovy.sql.Sql;
-		import java.sql.Connection;
+		<div class="wfg-canvas-with-panel" v-show="selectedRow && selectedRow.id">
 		
-		String dataAtual	= execScript.getValueVar('dataAtual');
-		String horaAtual	= execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
-		int idUsuario		= Integer.parseInt(execScript.getValueVar('idUsuario'));
+		<section class="wfg-canvas-wrap">
+			<div class="wfg-canvas-header">
+				<span>Fluxo de tarefas da fila</span>
+				<div class="wfg-canvas-actions">
+					<span>Status: <strong :class="flowStatusClass">{{ flowStatusText }}</strong></span>
+					<button class="wfg-btn success" @click="saveFlow" :disabled="!flowIsValid">
+						<i class="el-icon-fa-save"></i><span> Salvar fluxo</span>
+					</button>
+					<button class="wfg-btn primary" @click="openAddNodeDialog">
+						<i class="el-icon-fa-plus"></i><span> Adicionar nó</span>
+					</button>
+				</div>
+			</div>
+			<div class="wfg-canvas-placeholder" v-if="drawflowError">
+				<span>{{ drawflowError }}</span>
+			</div>
+			<div class="wfg-drawflow-editor-wrap" v-show="!drawflowError">
+				<div id="drawflowEditor" class="wfg-drawflow-editor"></div>
+				<button
+					type="button"
+					class="wfg-drawflow-fit-btn"
+					@click="fitFlowToView"
+					:disabled="!selectedRow || !selectedRow.id"
+					title="Enquadrar nós"
+				>
+					<i class="fa-solid fa-arrows-to-eye"></i>
+				</button>
+			</div>
+			<div id="drawflow"></div>
+		</section>
 
-		String msg1 = 'Categoria gravada com sucesso.';
-		String msg2 = 'Erro ao gravar categoria.';
+		<aside class="wfg-panel">
+			<section class="wfg-side-block">
+				<h3>Nó selecionado</h3>
+				<p v-if="!selectedDrawflowNodeId" class="wfg-side-hint">Clique em um nó no fluxo para ver metadados e filtros.</p>
+				<template v-else>
+					<div class="wfg-tag-list">
+						<span class="wfg-tag ok">ID: {{ selectedDrawflowNodeId }}</span>
+						<span v-if="sidePanelTask" class="wfg-tag">{{ sidePanelTask.nome }}</span>
+						<span v-if="sidePanelTask" class="wfg-tag">{{ sidePanelTask.apelido }}</span>
+					</div>
+					<p v-if="!sidePanelTask" class="wfg-side-hint">Esta tarefa não possui catálogo de filtros configurado no studio.</p>
+					<el-form v-else label-position="top" size="small" class="wfg-side-filters">
+							<el-cst-line-title v-show="sidePanelTask && sidePanelTask.filters && sidePanelTask.filters.length > 0">Filtros</el-cst-line-title>                        <el-collapse accordion>
+                            <el-collapse-item v-for="(grp, gi) in sidePanelTask.filters" :title="grp.label" :name="'g'+gi" :key="'g'+gi">
+                                <!-- <el-cst-line-title :key="'g'+gi">{{  }}</el-cst-line-title> -->
+                                <template v-for="(it, ii) in grp.items">
+                                    <el-form-item v-if="filterItemVisible(it) && it.type==='checkbox'" :key="'i'+gi+'_'+ii" label=" ">
+                                        <el-checkbox v-model="sidePanelValues[it.key || it.value]" @change="syncSidePanelToStore">{{ it.label }}</el-checkbox>
+                                    </el-form-item>
+                                    <el-form-item v-else-if="filterItemVisible(it) && it.type==='number'" :key="'i'+gi+'_'+ii" :label="it.label">
+                                        <el-input-number v-model="sidePanelValues[it.key || it.value]" controls-position="right" :min="it.min" style="width:100%;" @change="syncSidePanelToStore"></el-input-number>
+                                    </el-form-item>
+                                    <el-form-item v-else-if="filterItemVisible(it) && it.type==='select'" :key="'i'+gi+'_'+ii" :label="it.label">
+                                        <el-select v-model="sidePanelValues[it.key || it.value]" :multiple="it.multiple" filterable clearable :placeholder="it.placeholder || ''" style="width:100%;" @change="syncSidePanelToStore">
+                                            <el-option v-for="opt in resolveFilterOptions(it)" :key="opt.value" :label="opt.label" :value="opt.value"></el-option>
+                                        </el-select>
+                                    </el-form-item>
+                                    <el-form-item v-else-if="filterItemVisible(it)" :key="'i'+gi+'_'+ii" :label="it.label">
+                                        <el-input v-model="sidePanelValues[it.key || it.value]" :placeholder="it.placeholder || ''" @change="syncSidePanelToStore"></el-input>
+                                    </el-form-item>
+                                </template>
+                            </el-collapse-item>
+                        </el-collapse>
+					</el-form>
+				</template>
+			</section>
+		</aside>
+		</div>
 
-		Connection con = execScript.getConnection(execScript.getValueVar("ds_bridge"));
-		Connection conDS2 = execScript.getConnection(execScript.getValueVar("datasource2"));
-		
-        SQLUtilX sqlUtilXCONFIG = new SQLUtilX('configtarefa', 'descricao, valor, dataalteracao, idusuarioalteracao', 'apelidotarefa, chave')
-								   .setConnectionX(con);
+		<el-dialog title="Adicionar nó ao fluxo" :visible.sync="dialogNodeVisible" width="560px" :close-on-click-modal="false">
+			<el-form label-position="top" size="medium">
+				<el-form-item label="Tarefa disponível">
+					<el-select v-model="newNodeTaskAlias" filterable style="width: 100%;" placeholder="Selecione uma tarefa">
+						<el-option v-for="item in addNodeTaskOptions" :key="item.apelido" :label="item.nome" :value="item.apelido"></el-option>
+					</el-select>
+				</el-form-item>
+			</el-form>
+			<span slot="footer" class="dialog-footer">
+				<button class="wfg-btn warning" @click="dialogNodeVisible = false">Cancelar</button>
+				<button class="wfg-btn primary" @click="confirmAddNode"><i class="el-icon-fa-plus"></i><span> Adicionar</span></button>
+			</span>
+		</el-dialog>
 
-		def model = new JsonSlurper().parseText(execScript.getValueVar("model"));
-		String action = execScript.getValueVar("_action");
+	</section>
 
-		String response;
+	<div id="vueFormEdit">
+		<el-dialog :title="editFormTitle" :visible.sync="dialogVisible" width="70%" :close-on-click-modal="false"
+			v-loading="loading">
+			<el-form ref="formEdit" :model="editModel" :rules="rules" label-position="top" size="medium"
+				class="demo-edit">
+				<el-row>
+					<el-col :span="24">
+						<h3 style="margin: 0;">Código: {{ editModel.id }}</h3>
+					</el-col>
+				</el-row>
+				<el-row :gutter="10">
+					<el-col :span="20">
+						<el-form-item label="Descrição da Fila" prop="descricao">
+							<el-input ref="edit_descricao" v-model="editModel.descricao"></el-input>
+						</el-form-item>
+					</el-col>
+					<el-col :span="4">
+						<el-form-item label="Situação" prop="situacao">
+							<el-switch :active-value="'A'" :inactive-value="'I'"
+								v-model="editModel.situacao"></el-switch>
+						</el-form-item>
+					</el-col>
+				</el-row>
+				<el-row :gutter="10">
+					<el-col :span="12">
+						<el-form-item label="Processo WF" prop="idwfprocesso">
+							<el-select v-model="editModel.idwfprocesso" filterable style="width: 100%;" :loading="$$store.loadingProcessos" @change="onChangeProcesso">
+								<el-option v-for="item in $$store.optionsProcessos" :key="item.value" :label="item.label"
+									:value="item.value">
+								</el-option>
+							</el-select>
+						</el-form-item>
+					</el-col>
+					<el-col :span="12">
+						<el-form-item label="Evento WF" prop="idwfprocessoevento">
+							<el-select v-model="editModel.idwfprocessoevento" style="width: 100%;" :loading="$$store.loadingEventos">
+								<el-option v-for="item in $$store.optionsEventos" :key="item.value" :label="item.label"
+									:value="item.value">
+								</el-option>
+							</el-select>
+						</el-form-item>
+					</el-col>
+				</el-row>
 
-		EntityManager em = execScript.getEntityManager();
-		
-		try {
+				<h3 style="margin: 16px 0 8px;">Agenda da tarefa de execução</h3>
+				<el-collapse v-model="collapseAgendaNames" style="max-height: 440px; overflow-y: auto; overflow-x: hidden">
+					<el-cst-panel title="Dias" style="margin-right: 10px;">
+						<el-form-item label-width="0px">
+							<el-radio-group v-model="editModel.tipoDias">
+								<el-radio :label="0">Executar nos seguintes dias da semana</el-radio>
+								<el-radio :label="1">Executar nos seguintes dias</el-radio>
+							</el-radio-group>
+						</el-form-item>
+						<el-form-item v-show="editModel.tipoDias === 0">
+							<el-row :gutter="20">
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[0]">Domingo</el-checkbox>
+								</el-col>
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[1]">Segunda</el-checkbox>
+								</el-col>
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[2]">Terça</el-checkbox>
+								</el-col>
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[3]">Quarta</el-checkbox>
+								</el-col>
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[4]">Quinta</el-checkbox>
+								</el-col>
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[5]">Sexta</el-checkbox>
+								</el-col>
+								<el-col :xs="12" :sm="12" :md="8" :lg="3" :xl="3">
+									<el-checkbox true-label="1" false-label="0" v-model="editModel._diasSemana[6]">Sábado</el-checkbox>
+								</el-col>
+							</el-row>
+						</el-form-item>
+						<el-form-item v-show="editModel.tipoDias === 1">
+							<el-row :gutter="20">
+								<el-col :xs="24" :sm="24" :md="12" :lg="8" :xl="8">
+									<el-form-item label="Dias">
+										<el-input v-model="editModel.dias" :readonly="true" :clearable="true">
+											<el-button type="success" @click="dialogDiasVisible = true" plain slot="prepend">Dias</el-button>
+										</el-input>
+									</el-form-item>
+								</el-col>
+								<el-col :xs="24" :sm="24" :md="12" :lg="8" :xl="8">
+									<el-form-item label="Meses">
+										<el-input v-model="editModel.meses" :readonly="true" :clearable="true">
+									  		<el-button type="success" @click="dialogMesesVisible = true" plain slot="prepend">Meses</el-button>
+										</el-input>
+									</el-form-item>
+								</el-col>
+								<el-col :xs="24" :sm="24" :md="12" :lg="8" :xl="8">
+									<el-form-item label="Anos">
+										<el-input v-model="editModel.anos" :readonly="true" :clearable="true">
+									  		<el-button type="success" @click="dialogAnosVisible = true" plain slot="prepend">Anos</el-button>
+										</el-input>
+									</el-form-item>
+								</el-col>
+							</el-row>
+						</el-form-item>
+						<el-form-item label="Além das configurações acima a tarefa deverá ser executada nas seguintes datas" label-width="100%" style="clear: both;"></el-form-item>
+						<el-form-item>
+							<el-input type="textarea" :rows="2" v-model="editModel.datas" :readonly="true" :clearable="true">
+						  		<el-button type="success" @click="dialogDatasVisible = true" plain slot="prepend">Datas</el-button>
+						  	</el-input>
+						</el-form-item>
+					</el-cst-panel>
+					<el-cst-panel title="Horas" style="margin-right: 10px;">
+						<el-form-item label-width="0px">
+							<el-radio-group v-model="editModel.tipoHorarios">
+								<el-radio :label="0">Executar a cada</el-radio>
+								<el-radio :label="1">Executar nos seguintes horários</el-radio>
+							</el-radio-group>
+						</el-form-item>
+						<el-form-item v-show="editModel.tipoHorarios === 0">
+							<el-row :gutter="20">
+								<el-col :xs="24" :sm="24" :md="12" :lg="8" :xl="8">
+									<el-input-number v-model="editModel.intervalo" controls-position="right" :min="1" style="width: 100%;"></el-input-number>
+									<el-select v-model="editModel.tipoIntervalo" style="width:100%; margin-top: 8px;">
+										<el-option v-for="item in $$store.tiposIntervalos" :key="item.value" :label="item.label" :value="item.value"></el-option>
+									</el-select>
+								</el-col>
+								<el-col :xs="24" :sm="24" :md="12" :lg="16" :xl="16">
+									<span style="vertical-align: middle;">entre</span>
+									<el-time-picker v-model="editModel._horaInicialHoraFinal" is-range range-separator="e"
+										start-placeholder="Horário inicial" end-placeholder="Horário final"
+										style="margin-left: 8px; max-width: 100%; vertical-align: middle;"></el-time-picker>
+								</el-col>
+							</el-row>
+						</el-form-item>
+						<el-form-item v-show="editModel.tipoHorarios === 1">
+							<el-input v-model="editModel.horarios" :readonly="true" :clearable="true">
+						  		<el-button type="success" @click="showDialogHorarios()" plain slot="prepend">Horários</el-button>
+							</el-input>
+						</el-form-item>
+						<el-form-item label="Condição Execução" label-width="140px">
+							<el-tooltip placement="top-start">
+								<div slot="content">
+									<b>&lt;condicao1&gt;, &lt;condicao2&gt;, ...</b><br/>
+									Exemplos:<br/>
+									e: 1 (a tarefa será executada se ainda não houve uma execução no dia)<br/>
+									en: 1 (a tarefa será executada se ainda não houve uma execução com notificação no dia)<br/>
+									e: 2 week (a tarefa será executada se ainda não houve 2 execuções na semana)<br/>
+									Os seguintes atributos podem ser usados:<br/>
+									day (padrão), week, month e year
+								</div>
+								<el-input v-model="editModel.scriptAcao"></el-input>
+							</el-tooltip>
+						</el-form-item>
+					</el-cst-panel>
+				</el-collapse>
+			</el-form>
+			<span slot="footer" class="dialog-footer">
+				<el-button @click="dialogVisible = false">Cancelar</el-button>
+				<el-button type="success" @click="save()"><i class="el-icon-fa-save"></i><span>Salvar</span></el-button>
+			</span>
+		</el-dialog>
+	    $> sb.append(dialogDias());
+	    $> sb.append(dialogMeses());
+	    $> sb.append(dialogAnos());
+	    $> sb.append(dialogDatas());
+	    $> sb.append(dialogHorarios());
+	</div>
 
-			//# Cria a tarefa de execução
-			em.getTransaction().begin();
+</div>
 
-			TarefaDAO dao = new TarefaDAO(em);
-			ProcessoDAO pDAO = new ProcessoDAO(em);
-			SubprocessoDAO spDAO = new SubprocessoDAO(em);
+$include{notif:HEAVEN-wfg-cadastro-filas-parte2}include
 
-			Processo processo = pDAO.findById(1034, false);
-			Subprocesso subprocesso = spDAO.findById(1007, false);
+<!--section-->
 
-			Tarefa e = (action.equals("update") ? dao.findById(model.id, true) : new Tarefa(model.id));
-
-			e.setDescTarefa(model.descricao)
-			e.setSituacao(model.situacao == 'A' ? Tarefa.SITUACAO_ATIVA : Tarefa.SITUACAO_INATIVA);
-			
-			e.setTipoDias(model.tipoDias);
-			e.setDiasSemana(model.diasSemana);
-			e.setDias(model.dias);
-			e.setMeses(model.meses);
-			e.setAnos(model.anos);
-			e.setDatas(model.datas);
-			e.setTipoHorarios(model.tipoHorarios);
-			e.setTipoIntervalo(model.tipoIntervalo);
-			e.setIntervalo(model.intervalo);
-			e.setHoraInicial(model.horaInicial);
-			e.setHoraFinal(model.horaFinal);
-			e.setHorarios(model.horarios);
-			e.setScriptAcao(model.scriptAcao);
-			e.setUsuarioAlt(execScript.getExecContext().getUsuario());
-			e.getTarefaMsgHtml();
-			e.getTarefaMsgTexto();
-			
-			e.setProcesso(processo);
-			e.setSubprocesso(subprocesso);
-
-			if (action.equals("insert")) {
-				e.setScript('$' + 'include{script:HEAVEN-wfg-execucao}include');
-				e.setCondicaoNotificacao('true');
-			}
-
-	        dao.beforeSave(e);
-	       	
-			model.id = e.getIdTarefa();
-			e.setApelido("CLIENTE-wfg-${model.id}-execucao");
-	       
-		    Tarefa e2 = dao.save(e);
-	        em.getTransaction().commit();
-
-			String cfg = """{ "CLIENTE-wfg-cfg-WFProcesso_idWFProcesso": ${model.idwfprocesso}, "CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento": ${model.idwfprocessoevento}, "CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento": "HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico" } """;
-			
-			//# Cria a tarefa de execução
-			response = sqlUtilXCONFIG
-					.setString("CFG Processo, Evento e Encaminhamento")
-					.setString(cfg)
-					.setDate(dataAtual)
-					.setInt(idUsuario)
-					.setStringPK("CLIENTE-wfg-${model.id}-execucao")
-					.setStringPK("CLIENTE-wfg-cfg")
-					.insertOrUpdate("CFG 'CLIENTE-wfg-cfg' gravado com sucesso", "Erro ao gravar cfg 'CLIENTE-wfg-cfg'");
-
-			response = SQLUtilX.toJSON(1, action, "Tarefa ${model.id} gravada com sucesso.", "");
-			
-			def entity = """{ "id": "$model.id"}""";
-			
-			response = SQLUtilX.setEntityToJSON(response, entity);
-
-			execScript.debug("@@@@@@@@ 1 ${response}");
-
-			execScript.addVar('response', response);
-			return response;
-        } catch (Exception ex) {
-        	if (em.getTransaction().isActive()) {
-        		em.getTransaction().rollback();
-        	}
-			execScript.debug("@@@@@@@@ 2 ${ex.getMessage()}");
-			return SQLUtilX.toJSON(1, action, "Erro ao gravar Fila.", ""+ex.getMessage());
-        }
-	</script_java_groovy>
-
-	<!--output-->
-	$> msgBuilder.setContentType('application/json');
-	$> msgBuilder.setCharset('UTF-8');
-	$> sb.append(execScript.getValueVar('response#'));
-</script_function>
-
-<script_function name="saveFlow">
-	~write_exec_log;
-	set run = ''+execScript.getTarefaExecucao().setObs('saveFlow - $v{usuario}');
-
-	connect $v{ds_bridge};
-	
-	set msg1 = "Fluxo salvo com sucesso";
-	set msg2 = "Não foi possível salvar o fluxo";
-
-#	sql_exec CREATE SEQUENCE if not exists public.seq_idwfgtarefa;
-#	sql_exec create table if not exists WfgTarefa (
-#        idWfgTarefa INTEGER NOT NULL DEFAULT nextval('public.seq_idwfgtarefa'),
-#        apelidoTarefa VARCHAR(256) NOT NULL,
-#        apelidoTarefaMae VARCHAR(256) NOT NULL,
-#        ordemExecucao INTEGER NOT NULL,
-#        dataAlteracao DATE NOT NULL,
-#        horaAlteracao VARCHAR(8) NOT NULL,
-#        idUsuarioAlteracao INTEGER,
-#        jsonbParametros VARCHAR(12345) NOT NULL,
-#        CONSTRAINT wfgtarefa_pk PRIMARY KEY (idWfgTarefa )
-#	);
-#	sql_exec ALTER TABLE WfgTarefa alter column jsonbParametros type jsonb using jsonbParametros::jsonb;
-#	sql_exec  ALTER SEQUENCE public.seq_idwfgtarefa OWNED BY public.WfgTarefa.idWfgTarefa;
-
-	begin_transaction;
-		run_script_java_groovy saveFlow;
-		
-		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
-			rollback;
-			stop_if true;
-		end_if;
-	commit;
-
-	<script_java_groovy name="saveFlow">
-		import groovy.json.JsonOutput;
-		import groovy.json.JsonSlurper;
-		import groovy.sql.Sql;
-		import java.sql.Connection;
-		import org.postgresql.util.PGobject;
-		import bdo.util.SQLUtilX;
-
-		String id = execScript.getValueVar("id");
-		if (id == null || id.trim().isEmpty()) {
-			execScript.addVar("response", SQLUtilX.toJSON(1, "saveFlow", execScript.getValueVar("msg2"), "ID da fila não informado."));
-			return;
-		}
-
-		String flowJson = execScript.getValueVar("flow");
-		String wfgNodesJson = execScript.getValueVar("wfgNodesJson");
-		String nodefiltersJson = execScript.getValueVar("nodefiltersJson");
-		
-		String dataAtual	= execScript.getValueVar('dataAtual');
-		String horaAtual	= execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
-		int idUsuario		= Integer.parseInt(execScript.getValueVar('idUsuario'));
-
-		if (flowJson == null || flowJson.trim().isEmpty()) {
-			flowJson = "{}";
-		}
-		if (wfgNodesJson == null || wfgNodesJson.trim().isEmpty()) {
-			wfgNodesJson = "[]";
-		}
-		if (nodefiltersJson == null || nodefiltersJson.trim().isEmpty()) {
-			nodefiltersJson = "{}";
-		}
-
-		String apelidoTarefaMae = "CLIENTE-wfg-${id}-execucao";
-
-		def con = execScript.getConnection();
-		Sql sql = new Sql(con);
-
-		SQLUtilX sqlUtilXCONFIG = new SQLUtilX("configtarefa", "descricao, valor, dataalteracao, idusuarioalteracao", "apelidotarefa, chave")
-			.setConnectionX(con);
-		SQLUtilX sqlUtilXWfgTarefa = new SQLUtilX(
-			"WfgTarefa",
-			"apelidoTarefa, apelidoTarefaMae, ordemExecucao, dataAlteracao, horaAlteracao, idUsuarioAlteracao, jsonbParametros",
-			"idWfgTarefa"
-		).setConnectionX(con);
-
-		def payloadCfg = [
-			flowjson: flowJson,
-			nodefiltersjson: nodefiltersJson
-		];
-		String valorCfg = JsonOutput.toJson(payloadCfg);
-
-		sqlUtilXCONFIG
-			.setString("CFG Drawflow WFG")
-			.setString(valorCfg)
-			.setDate(dataAtual)
-			.setInt(idUsuario)
-			.setStringPK(apelidoTarefaMae)
-			.setStringPK("CLIENTE-wfg-cfg-drawFlow")
-			.insertOrUpdate("CFG drawFlow gravada com sucesso.", "Erro ao gravar cfg drawFlow.");
-
-		sql.execute("delete from WfgTarefa where apelidoTarefaMae = ?", [apelidoTarefaMae]);
-
-		def parsedNodes = new JsonSlurper().parseText(wfgNodesJson);
-		List nodes = (parsedNodes instanceof List ? parsedNodes : []);
-		int ordem = 1;
-		nodes.each { node ->
-			if (node instanceof Map) {
-				String apelidoTarefa = (node.apelidoTarefa ?: "").toString();
-				if (!apelidoTarefa.trim().isEmpty()) {
-					int ordemExecucao = (node.ordemExecucao instanceof Number ? ((Number) node.ordemExecucao).intValue() : ordem);
-					def jsonbParametros = [
-						drawflowNodeId: (node.drawflowNodeId ?: "").toString(),
-						nome: (node.nome ?: "").toString(),
-						filters: (node.filters instanceof List ? node.filters : [])
-					];
-					PGobject jsonbParametrosObj = new PGobject();
-					jsonbParametrosObj.setType("jsonb");
-					jsonbParametrosObj.setValue(JsonOutput.toJson(jsonbParametros));
-
-					String nodeResponse = sqlUtilXWfgTarefa
-						.setNotInsertPKX(true)
-						.setIndex(-1)
-						.setIndexPK(-1)
-						.setString(apelidoTarefa)
-						.setString(apelidoTarefaMae)
-						.setInt(ordemExecucao)
-						.setDate(dataAtual)
-						.setString(horaAtual)
-						.setInt(idUsuario)
-						.setObject(jsonbParametrosObj)
-						.setIntPK(-1)
-						.insertOrUpdate("Tarefa WFG salva com sucesso.", "Erro ao salvar tarefa WFG.");
-					if (nodeResponse.contains("Erro ao salvar tarefa WFG.")) {
-						throw new RuntimeException(nodeResponse);
-					}
-					
-					ordem++;
-				}
-			}
-		}
-
-		execScript.addVar("response", SQLUtilX.toJSON(1, "saveFlow", execScript.getValueVar("msg1"), ""));
-	</script_java_groovy>
-
-	<!--output-->
-	$> msgBuilder.setContentType('application/json');
-	$> msgBuilder.setCharset('UTF-8');
-	$> sb.append(execScript.getValueVar('response#'));
-</script_function>
+<!-- Moment -->
+$> sb.append("""<script type="text/javascript" charset="UTF-8" src="js/moment-2.18.1/moment-with-locales.min.js"></script>\n""");
+$> sb.append("""<script type="text/javascript" charset="UTF-8" src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.js"></script>\n""");
+$> sb.append("""<script type="text/javascript" charset="UTF-8" src="odwctrl?action=execTarefa&apelido=element-ui-crud-base-js&tKey=${CryptUtil.getHexHash('#element-ui-crud-base-js.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}"></script>\n""");
+$> sb.append("""<script type="text/javascript" charset="UTF-8" src="odwctrl?action=execTarefa&apelido=$v{apelido}-js&tKey=${CryptUtil.getHexHash('#$v{apelido}.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}&apelidoTarefaMae=$v{apelido}"></script>""");

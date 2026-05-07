@@ -219,7 +219,7 @@ $include{script:HEAVEN-wfg-cadastro-filas-parte2}include
 		    Tarefa e2 = dao.save(e);
 	        em.getTransaction().commit();
 
-			String cfg = """{ "CLIENTE-wfg-cfg-WFProcesso_idWFProcesso": ${model.idwfprocesso}, "CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento": ${model.idwfprocessoevento}, "CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento": "HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico" } """;
+			String cfg = """{ "CLIENTE-wfg-cfg-WFProcesso_idWFProcesso": ${model.idwfprocesso}, "CLIENTE-wfg-cfg-WFProcessoEvento_idWFProcessoEvento": ${model.idwfprocessoevento}, "CLIENTE-wfg-cfg-WFOcorrencia_apelidoTarefaEncaminhamento": "HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico" } """;
 			
 			//# Cria a tarefa de execução
 			response = sqlUtilXCONFIG
