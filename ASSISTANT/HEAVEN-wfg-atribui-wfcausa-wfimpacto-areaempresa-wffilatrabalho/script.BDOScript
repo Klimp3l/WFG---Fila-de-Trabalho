@@ -28,6 +28,8 @@ set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.
 connect $v{ds_bridge};
 
 begin_transaction;
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
 	sql_exec 
 		UPDATE 	wffilatrabalho ft
 		SET 	idwfimpacto = ar.idwfimpacto,

@@ -37,6 +37,8 @@ set datainiciobuscadados =  '$exp{addDays($v{dataAtual}, -20)}exp';
 
 begin_transaction;
 
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
 	sql_exec 
 	With 
 		ocorrencias as (

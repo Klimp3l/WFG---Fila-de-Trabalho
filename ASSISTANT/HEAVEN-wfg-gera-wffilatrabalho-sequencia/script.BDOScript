@@ -29,6 +29,8 @@ connect $v{ds_bridge};
 
 begin_transaction;
 
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
 	sql_exec 
 	INSERT INTO	WFFilatrabalho 
 				(idwfocorrencia, idwfatividade, idempresa, idwffilatrabalhoanterior, datainclusao, horainclusao, idtarefaexecucaoinclusao, dataexpiracao, horaexpiracao)

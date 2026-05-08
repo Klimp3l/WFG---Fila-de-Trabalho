@@ -25,33 +25,33 @@ save_rows(1,1);
 set filtro_WFProcessoEvento_idWFProcessoEvento = '$v{WFProcessoEvento_idWFProcessoEvento#}'.equals('') ? '' : ' and o.idWFProcessoEvento in ($v{WFProcessoEvento_idWFProcessoEvento}) ';
 
 begin_transaction;
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
 
-sql_exec
-Update
-	WFFilatrabalho ft
-Set 
-	expirada = 'S',
-	dataexpiracao = '$v{dataAtual}',
-	horaexpiracao = '$v{dataAtual"datetime:HH:mm:ss"}',
-	idtarefaexecucaoexpiracao = $v{execId},
+	sql_exec
+	Update
+		WFFilatrabalho ft
+	Set 
+		expirada = 'S',
+		dataexpiracao = '$v{dataAtual}',
+		horaexpiracao = '$v{dataAtual"datetime:HH:mm:ss"}',
+		idtarefaexecucaoexpiracao = $v{execId},
 
-	idwfatividaderealizada = a.idwfatividaderealizadaexpiracao, 
-	dataatividaderealizada = '$v{dataAtual}', 
-	horaatividaderealizada = '$v{dataAtual"datetime:HH:mm:ss"}',
-	idtarefaexecucaoatividaderealizada = $v{execId}
-From
-	wfocorrencia o
-	cross join wfatividade a
-Where
-	o.idwfocorrencia = ft.idwfocorrencia
-	and a.idwfatividade = ft.idwfatividade
-	and current_timestamp >= cast(ft.dataexpiracao||' '||ft.horaexpiracao as timestamp)
-	and ft.expirada = 'N'
-	and ft.idwfatividaderealizada is null
-	and a.idwfatividaderealizadaexpiracao is not null
-	$v{filtro_WFProcessoEvento_idWFProcessoEvento}
-;
-
+		idwfatividaderealizada = a.idwfatividaderealizadaexpiracao, 
+		dataatividaderealizada = '$v{dataAtual}', 
+		horaatividaderealizada = '$v{dataAtual"datetime:HH:mm:ss"}',
+		idtarefaexecucaoatividaderealizada = $v{execId}
+	From
+		wfocorrencia o
+		cross join wfatividade a
+	Where
+		o.idwfocorrencia = ft.idwfocorrencia
+		and a.idwfatividade = ft.idwfatividade
+		and current_timestamp >= cast(ft.dataexpiracao||' '||ft.horaexpiracao as timestamp)
+		and ft.expirada = 'N'
+		and ft.idwfatividaderealizada is null
+		and a.idwfatividaderealizadaexpiracao is not null
+		$v{filtro_WFProcessoEvento_idWFProcessoEvento}
+	;
 commit;
 
 # Finaliza as ocorrências

@@ -301,6 +301,8 @@ sql_var(sql_idsetor);
 	
 	connect $v{ds_bridge};
 	begin_transaction ;
+		sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
 		run_script_java_groovy update;
 		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
 			rollback;

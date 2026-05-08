@@ -130,7 +130,11 @@ $include{script:HEAVEN-wfg-cadastro-filas-parte2}include
 
 	connect $v{ds_bridge};
 
-	run_script_java_groovy save -> var: response;
+	begin_transaction;
+		sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
+		run_script_java_groovy save -> var: response;
+	commit;
 
 	<script_java_groovy name="save">
 		import java.util.List;
@@ -281,6 +285,8 @@ $include{script:HEAVEN-wfg-cadastro-filas-parte2}include
 #	sql_exec  ALTER SEQUENCE public.seq_idwfgtarefa OWNED BY public.WfgTarefa.idWfgTarefa;
 
 	begin_transaction;
+		sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
 		run_script_java_groovy saveFlow;
 		
 		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
