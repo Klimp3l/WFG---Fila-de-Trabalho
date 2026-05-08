@@ -141,7 +141,7 @@ set filtroGeralPontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals(""
 
 #########
 # Withs #
-set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
+set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroEstoqueZero}".equals("") ? """
 	ultimoinventarioestoque as (
 		Select
 			x.*
