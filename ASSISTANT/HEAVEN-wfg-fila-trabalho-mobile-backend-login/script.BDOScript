@@ -1,0 +1,45 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 04/05/2022 | Bernardo    | 		       | 	 	     | Criação.
+
+<script_function name="getSession">
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('GET - getSession');
+
+	run_script_java_groovy getSession;
+
+	<script_java_groovy name="getSession">
+		import javax.servlet.http.HttpSession;
+		import javax.servlet.http.HttpServletRequest;
+		import groovy.json.JsonBuilder;
+
+		HttpServletRequest request = execScript.getExecContext().getHttpServletRequest();
+		HttpSession session = request.getSession(false);
+
+		execScript.debug("${session != null}");
+
+		def response;
+
+		if (session != null) {
+			response = [
+				"success": true,
+				"message": "Sessão válida"
+			]
+		} else {
+			response = [
+				"success": false,
+				"message": "Sessão inválida"
+			]
+		}
+
+		execScript.addVar('response', new JsonBuilder(response).toString());
+	</script_java_groovy>
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append(execScript.getValueVar('response'));
+</script_function>

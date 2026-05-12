@@ -1,0 +1,367 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 04/05/2022 | Bernardo    | 		       | 	 	     | Criação.
+
+<script_function name="getAtividades">
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('getAtividades -  $v{usuario}');
+
+	#######################
+	# Busca os Parâmetros #
+	#######################
+
+	connect $v{ds_bridge};
+
+	sql 
+	select 
+		e.idempresa as idempresa
+		,e.apelido as empresa
+		,p.idwfprocesso as idwfprocesso
+		,trim(p.descricao) as wfprocesso
+		,a.idwfatividade as idwfatividade
+		,trim(a.descricao) as wfatividade
+		,coalesce((
+			Select
+				json_agg(
+					json_build_object(
+						'idwffilatrabalho', ft.idwffilatrabalho,
+						'idwfocorrencia', o.idwfocorrencia,
+						'idempresa', e2.idempresa,
+						'empresa', coalesce(e2.apelido, e2.nomefantasia),
+						'idproduto', p.idproduto,
+						'codigobarras', p.codigobarras,
+						'produto', p.descricao,
+						'imagem', p.foto,
+						'idwfatividaderealizada', ft.idwfatividaderealizada,
+						'observacao',coalesce((Select ft2.observacao From wffilatrabalho ft2 Where ft2.idwffilatrabalho = ft.idwffilatrabalhoanterior), ''),
+						'datainclusao', ft.datainclusao::varchar,
+						'horainclusao', ft.horainclusao,
+						
+						'datavencimento', (o.valores->>'datavencimento')::varchar,
+						'dataprevisaosaida', (o.valores->>'dataprevisaosaida')::varchar,
+						'classificacao', (Case (o.valores->>'classificacao')::bigint
+							when 0 then 'Baixo Risco'
+							when 1 then 'Medio Risco'
+							when 2 then 'Alto Risco'
+							else ''
+						end),
+						
+						'idfamilia', f.idfamilia,
+						'familia', f.descricao,
+						'idgrupo', g.idgrupo,
+						'grupo', g.descricao,
+						'idsetor', s.idsetor,
+						'setor', s.descricao,
+						'iddepartamento', d.iddepartamento,
+						'departamento', d.descricao,
+						
+						'classe', cp.classe,
+						'valorprecovenda', ppc.valorprecovenda,
+						'valorcustoaquisicao', ppc.valorcustoaquisicao,
+						
+						'diassemvenda', (current_date - 1) - pr.dataultimavenda,
+						'dataultimavenda', pr.dataultimavenda::varchar,
+						'qtdultimavenda', pr.qtdeultimavenda,
+						'diasentrada', (current_date - 1) - pr.dataultimaentrada,
+						'dataultimaentrada', pr.dataultimaentrada::varchar,
+						'qtdultimaentrada', pr.qtdeultimaentrada,
+
+						'qtdeabastecimento', (o.valores->>'qtdeabastecimento')::numeric,
+						'ruptura', (o.valores->>'ruptura')::numeric,
+						'qtdestoqueatual', coalesce((
+							Select
+								sum(esa.quantidade)
+							From
+								estoquesaldoatual esa 
+								inner join estoquelocal ecl on (ecl.idlocalestoque = esa.idlocalestoque)
+							Where 
+								esa.idproduto = (o.chaves->>'idproduto')::bigint
+								and esa.idempresa = o.idempresa 
+		                        and ecl.localvenda = 'S'
+						), (o.valores->>'estoquequantidade')::numeric),
+						'fornecedor', coalesce((
+							Select
+								p.razaosocial
+							From
+								produtofornecedor pf
+								inner join pessoa p on (p.idpessoa = pf.idpessoa)
+							Where
+								pf.idproduto = (o.chaves->>'idproduto')::bigint
+								and p.situacao = 'A'
+								and p.fornecedor = 'T'
+							Limit 1
+						), ''),
+						'qtdvendamedia', pg.girodiareal,
+						'qtdestoqueatualcd', coalesce((
+							Select	sum(ea.quantidade)
+							From	estoquesaldoatual ea
+							Where	ea.idempresa in ($v{idempresaCD#0})
+									and ea.idproduto = (o.chaves->>'idproduto')::bigint
+						),0),
+						'qtdunentrada', p.qtdunentrada,
+						'recorrencia120dias', coalesce((
+							Select	count(distinct o2.idwfocorrencia)
+							From	wfocorrencia o2
+							Where	o2.idwfprocessoevento = o.idwfprocessoevento
+									and o2.idempresa = o.idempresa
+									and (o2.chaves->>'idproduto')::bigint = (o.chaves->>'idproduto')::bigint
+									and o2.datainclusao >= current_date-120
+						),0)
+					)
+				) as filas
+			From
+				wffilatrabalho ft 
+				inner join wfocorrencia o on o.idwfocorrencia = ft.idwfocorrencia
+				inner join empresa e2 on (e2.idempresa = o.idempresa)
+				inner join produto p on p.idproduto = (o.chaves->>'idproduto')::bigint
+				left join produtogiro pg on pg.idproduto = p.idproduto and pg.idempresa = o.idempresa and pg.dias = 90 and pg.tipogiro = 'V'
+				left join produtoprecocusto ppc on ppc.idproduto = p.idproduto and ppc.idempresa = o.idempresa
+				left join produtoresumo pr on pr.idproduto = p.idproduto and pr.idempresa = o.idempresa
+				left join familia f on f.idfamilia = p.idfamilia
+				left join grupo g on g.idgrupo = p.idgrupo
+				left join setor s on s.idsetor = p.idsetor
+				left join departamento d on d.iddepartamento = p.iddepartamento
+				left join classeproduto cp on
+					cp.idempresa = o.idempresa
+					and cp.idproduto = p.idproduto
+					and cp.idmercadologico = '0' /* #! 0 = Geral, Não é separado por mercadológico */
+					and cp.tipoanalise = 'G' /* #! Classificação do produto por quantidade de saída */
+			Where
+				ft.idusuarioresponsavel = $v{idUsuario}
+				and ft.idwfatividaderealizada is null
+				and o.idwffilatrabalhofinalizacao is null
+				and ft.idwfatividade = a.idwfatividade
+				and ft.idempresa = e2.idempresa
+				and ft.expirada = 'N'
+				and o.expirada = 'N'
+		), '[]') as produtos
+		,coalesce((
+			Select
+				json_agg(
+					json_build_object(
+						'idwfatividaderealizada', ar.idwfatividaderealizada,
+						'atividaderealizada', ar.descricao||coalesce(' -> '||a2.descricao, '')
+					)
+				)
+			from
+				wfatividaderealizada ar
+				left join wfatividade a2 on (a2.idwfatividade = ar.idwfatividadeproxima)
+			where
+				ar.idwfatividade = a.idwfatividade
+		), '[]') as atividadeselegiveis
+	from 
+		wfatividade a
+		inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
+		cross join empresa e
+	where 
+		exists (
+			select 	null 
+			from 	wffilatrabalho f 
+					inner join wfocorrencia o on o.idwfocorrencia = f.idwfocorrencia
+			where 	
+				f.idusuarioresponsavel = $v{idUsuario}
+				and f.idwfatividaderealizada is null 
+				and f.expirada = 'N'
+				and o.expirada = 'N'
+				and o.idwffilatrabalhofinalizacao is null
+				and o.apelidotarefaencaminhamento = 'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
+				and f.idwfatividade = a.idwfatividade
+				and f.idempresa = e.idempresa
+		) 
+	order by 
+		wfprocesso, wfatividade
+	sql_var(sqlAtividades) sql_props(lower_labels);
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('{"atividades":[').append(msgBuilder.sqlVarToJSON('sqlAtividades')).append(']}');
+</script_function>
+
+<script_function name="getAtividadeRealizada">
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('getAtividadeRealizada -  $v{usuario}');
+
+	connect $v{ds_bridge};
+
+	sql 
+	select
+		a.idwfatividade as idwfatividade
+		,a.descricao as wfatividade
+		,coalesce((
+			select 
+				json_agg(
+					json_build_object(
+						'idwfatividaderealizada', ar.idwfatividaderealizada,
+						'descricao', ar.descricao
+					)
+				) 
+			from wfatividaderealizada ar 
+			where ar.idwfatividade = a.idwfatividade
+			), '[]') as atividadesrealizadas
+	from
+		wfatividade a
+	sql_var(sqlAtividadeRealizada) sql_props(lower_labels);
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlAtividadeRealizada')).append(']');
+</script_function>
+
+<script_function name="getMercadologicos">
+	~not_save_exec;
+	set run = ''+execScript.getTarefaExecucao().setObs('GET - getMercadologicos');
+
+	connect $v{ds_bridge};
+	
+	#######################  
+	# Busca os Parâmetros #   
+	####################### 
+	 
+	sql 
+	WITH mercadologicos AS (
+		SELECT DISTINCT
+			p.iddepartamento,
+			p.idsetor,
+			p.idgrupo,
+			p.idfamilia
+		FROM produto p
+		WHERE p.situacao = 'A'
+	)
+	SELECT json_agg(dep ORDER BY dep.label) AS mercadologicos
+	FROM (
+	SELECT 
+		d.iddepartamento AS value,
+		d.descricao      AS label,
+		COALESCE((
+		SELECT json_agg(DISTINCT
+			jsonb_build_object(
+			'value', s.idsetor,
+			'label', s.descricao,
+			'grupos', COALESCE((
+				SELECT json_agg(DISTINCT
+				jsonb_build_object(
+					'value', g.idgrupo,
+					'label', g.descricao,
+					'familias', COALESCE((
+					SELECT json_agg(DISTINCT
+						jsonb_build_object(
+						'value', f.idfamilia,
+						'label', f.descricao
+						)
+					)
+					FROM mercadologicos m4
+					JOIN familia f ON f.idfamilia = m4.idfamilia
+					WHERE m4.idgrupo = g.idgrupo
+					), '[]'::json)
+				)
+				)
+				FROM mercadologicos m3
+				JOIN grupo g ON g.idgrupo = m3.idgrupo
+				WHERE m3.idsetor = s.idsetor
+			), '[]'::json)
+			)
+		)
+		FROM mercadologicos m2
+		JOIN setor s ON s.idsetor = m2.idsetor
+		WHERE m2.iddepartamento = d.iddepartamento
+		), '[]'::json) AS setores
+	FROM departamento d
+	WHERE EXISTS (
+		SELECT 1
+		FROM mercadologicos m
+		WHERE m.iddepartamento = d.iddepartamento
+	)
+	) dep
+	sql_var(sqlMercadologicos);
+	  
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> msgBuilder.setContentEncoding('gzip');
+	$> msgBuilder.setCharset('UTF-8');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlMercadologicos')).append(']');
+</script_function>
+
+<script_function name="update">
+	~write_exec_log;
+	set run = ''+execScript.getTarefaExecucao().setObs('update -  $v{usuario}');
+
+	set msg1 = 'Salvo com sucesso.';
+	set msg2 = 'Erro ao salvar.';
+	
+	connect $v{ds_bridge};
+
+	begin_transaction ;
+		sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
+		run_script_java_groovy update;
+		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
+			rollback;
+			stop_if true;
+		end_if;
+	commit ;
+
+	<script_java_groovy name="update">
+		import groovy.json.JsonSlurper;
+		import bdo.util.SQLUtilX;
+
+		def objArray = new JsonSlurper().parseText(execScript.getValueVar('wffilatrabalho'));
+		
+		String execId = execScript.getValueVar('execId');
+		String dataAtual = execScript.getValueVar('dataAtual');
+		String horaAtual = execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
+
+		String msg1 = execScript.getValueVar('msg1');
+		String msg2 = execScript.getValueVar('msg2');
+		
+		SQLUtilX sqlUtilX = new SQLUtilX('wffilatrabalho', 'idwfatividaderealizada, observacao, idtarefaexecucaoatividaderealizada, dataatividaderealizada, horaatividaderealizada', 'idwffilatrabalho');
+		sqlUtilX.setConnectionX(execScript.getConnection());
+
+		sqlUtilX.setInt(null)
+				.setString(null)
+				.setInt(execId)
+				.setDate(dataAtual)
+				.setString(horaAtual);
+				
+		String response = '';
+
+		for (obj in objArray) {
+			if (obj.idwfatividaderealizada) {
+
+				sqlUtilX.setIndex(-1)
+					.setIndexPK(-1)
+					.setInt(obj.idwfatividaderealizada)
+					.setString(obj.observacao)
+					.setIntPK(obj.idwffilatrabalho);
+					
+				response = sqlUtilX.update(msg1, msg2);
+			}
+
+			if (response.contains(msg2)) {
+				break;
+			}
+		}
+
+		execScript.addVar('response', response);
+
+		return true;
+	</script_java_groovy>
+
+	# Finaliza as ocorrências
+	$include{script:HEAVEN-wfg-finaliza-wfocorrencia-include}include
+
+	# Gera fila trabalho
+	$include{
+		script:HEAVEN-wfg-gera-wffilatrabalho-sequencia-include, 
+		"HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico"
+	}include
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> sb.append('$v{response}');
+</script_function>
