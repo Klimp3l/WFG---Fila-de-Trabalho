@@ -42,38 +42,3 @@
 	$> msgBuilder.setCharset('UTF-8');
 	$> sb.append(execScript.getValueVar('response'));
 </script_function>
-
-<script_function name="logout">
-	~write_exec_log;
-	set run = ''+execScript.getTarefaExecucao().setObs('GET - logout');
-
-	run_script_java_groovy logout;
-
-	<script_java_groovy name="logout">
-		import javax.servlet.http.HttpSession;
-		import javax.servlet.http.HttpServletRequest;
-		import groovy.json.JsonBuilder;
-
-		HttpServletRequest request = execScript.getExecContext().getHttpServletRequest();
-		HttpSession session = request.getSession(false);
-
-		if (session != null) {
-			session.invalidate();
-		}
-
-		execScript.debug("${session != null}");
-
-		def response = [
-			"success": true,
-			"message": "Logout realizado com sucesso"
-		]
-
-		execScript.addVar('response', new JsonBuilder(response).toString());
-	</script_java_groovy>
-
-	<!--output-->
-	$> msgBuilder.setContentType('application/json');
-	$> msgBuilder.setContentEncoding('gzip');
-	$> msgBuilder.setCharset('UTF-8');
-	$> sb.append(execScript.getValueVar('response'));
-</script_function>
