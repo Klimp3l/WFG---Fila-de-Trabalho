@@ -61,6 +61,13 @@ const vueDef = {
 							$> sb.append(scriptPontoExposicaoFilters());
 						]
 					},
+					{
+						nome: "Finaliza Fila",
+						apelido: "HEAVEN-wfg-finaliza-fila-trabalho-generica",
+						filters: [
+							$> sb.append(scriptAtividadeRealizadaFinalizacaoFilters());
+						]
+					},
 				]
 			};
 		},

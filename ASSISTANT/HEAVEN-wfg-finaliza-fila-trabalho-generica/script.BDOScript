@@ -1,0 +1,143 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 28/04/2026 | Bernardo    | 			   | 38535   	 | Criação.
+
+~write_exec_log;
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+connect $v{ds_bridge};
+
+sql 
+Select
+	'$v{WFProcesso_idWFProcesso#}' as "WFProcesso_idWFProcesso"
+	,'$v{WFProcessoEvento_idWFProcessoEvento#}' as "WFProcessoEvento_idWFProcessoEvento"
+	,'$v{idWFAtividadeRealizadaFinalizacao#}' as "idWFAtividadeRealizadaFinalizacao"
+	,'$v{vendaDiaAnterior#0}' as "vendaDiaAnterior"
+	,'$v{estoquePositivo#false}' as "estoquePositivo"
+	,'$v{estoquePositivoPontoExposicao#false}' as "estoquePositivoPontoExposicao"
+	,'$v{pontoExposicao#}' as "pontoExposicao"
+save_rows(1,1);
+
+#############################
+# Filtros de Dias Sem Venda #
+set filtroVendaDiaAnterior = '$v{vendaDiaAnterior#0}'.equals("0") ? "" : "and exists (
+	Select 	null
+	From produtoresumo pr
+	Where
+		pr.idempresa = e.idempresa
+		and pr.idproduto = p.idproduto
+		and pr.dataultimavenda >= (current_date - 1 as integer))
+)";
+
+###########
+# Estoque #
+set filtroEstoquePositivo = '$v{estoquePositivo#false}'.equals("false") ? "" : "and sum(esa.quantidade) > 0.";
+
+######################
+# Ponto de Exposição #
+set filtroEstoquePositivoPontoExposicao = '$v{estoquePositivoPontoExposicao#false}'.equals("false") ? "" : "and sum(ppe.quantidadeestoque) > 0.";
+set filtroPontoExposicao = '$v{pontoExposicao#}'.equals("") ? "" : "and ppe.idpontoexposicao in ($v{pontoExposicao#})";
+
+#########
+# Joins #
+set joinFiltroEstoque = !"$v{filtroEstoquePositivo}".equals("") ? """
+	inner join estoquesaldoatual esa on (esa.idempresa = e.idempresa and esa.idproduto = p.idproduto)
+	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
+""" : "";
+set joinProdutoPontoExposicao = !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
+	inner join produtopontoexposicao ppe on (ppe.idproduto = p.idproduto and ppe.idempresa = e.idempresa)
+""" : "";
+
+#######################################
+# SQL Finalização de Fila de Trabalho #
+#######################################
+
+connect $v{ds_bridge};
+
+begin_transaction;
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
+	sql_exec 
+	With 
+		atividadeRealizadaFinalizacao as (
+			Select
+				ar.idwfatividade
+				,ar.idwfatividaderealizada
+			From
+				wfatividaderealizada ar
+			Where
+				ar.idwfatividaderealizada = $v{idWFAtividadeRealizadaFinalizacao#0}
+		),
+		ocorrenciasElegiveis as (
+			Select
+				x.idempresa
+				,x.idproduto
+				,x.idwfocorrencia
+				,x.wffilatrabalho as idwffilatrabalhoanterior
+			From
+				(
+				Select
+					e.idempresa
+					,(o.chaves->>'idproduto')::bigint as idproduto
+					,o.idwfocorrencia
+					,ft.wffilatrabalho
+					
+					# -- Sequência de trabalho daquela ocorrência.
+					,dense_rank() over (partition by o.idwfocorrencia order by ft.idwffilatrabalho desc) as sequencia
+				From
+					wfocorrencia o
+					inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+				Where
+					o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+					and o.idwffilatrabalhofinalizacao is null
+					and o.expirada = 'N'
+				) x
+				inner join produto p on (p.idproduto = x.idproduto)
+				$v{joinFiltroEstoque}
+				$v{joinProdutoPontoExposicao}
+			Where
+				x.sequencia = 1 -- # Última fila de trabalho
+
+				/* Filtros de Dias Sem Venda */
+				$v{filtroVendaDiaAnterior}
+				
+				/* Filtros de Estoque Ponto de Exposição */
+				$v{filtroPontoExposicao}
+			Group by
+				x.idempresa
+				,x.idproduto
+				,x.idwfocorrencia
+				,x.wffilatrabalho
+			Having
+				1=1
+
+				/* Filtros de Estoque */
+				$v{filtroEstoquePositivo}
+
+				/* Filtros de Estoque Ponto de Exposição */
+				$v{filtroEstoquePositivoPontoExposicao}
+		),
+	Insert into WFFilatrabalho
+		(idwfocorrencia, idempresa, idwfatividade, idwfatividaderealizada, idwffilatrabalhoanterior, observacao, datainclusao, horainclusao, idtarefaexecucaoinclusao)
+	Select
+		o.idwfocorrencia
+		,o.idempresa
+		,ar.idwfatividade
+		,ar.idwfatividaderealizada
+		,o.idwffilatrabalhoanterior
+
+		,'Finalização automática da fila de trabalho, de acordo como configurado no nó de cadastro WFG.' as observacao
+		,'$v{dataAtual}'::date as datainclusao
+		,'$v{dataAtual"datetime:HH:mm:ss"}'::text as horainclusao
+		,$v{execId} as idtarefaexecucaoinclusao
+	From
+		ocorrenciasElegiveis o
+		inner join atividadeRealizadaFinalizacao ar on (ar.idwfatividaderealizada = $v{idWFAtividadeRealizadaFinalizacao#0})
+	;
+
+commit;

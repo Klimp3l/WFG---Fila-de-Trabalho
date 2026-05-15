@@ -125,3 +125,26 @@
 	$> msgBuilder.setContentType('application/json');
 	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sql')).append(']');
 </script_function>
+
+<script_function name="getAtividadesRealizadas">
+	~not_save_exec;
+	connect $v{ds_bridge};
+
+	sql
+	Select
+		ar.idwfprocesso
+		,ar.idwfatividaderealizada as value
+		,ar.descricao||' - '||ar.idwfatividaderealizada as label
+	From
+		wfatividaderealizada ar
+		inner join wfatividade a on (a.idwfatividade = ar.idwfatividade)
+	Where
+		ar.tiposituacao = 'F'
+	Order by
+		ar.descricao
+	sql_var(sql) sql_props(lower_labels);
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sql')).append(']');
+</script_function>

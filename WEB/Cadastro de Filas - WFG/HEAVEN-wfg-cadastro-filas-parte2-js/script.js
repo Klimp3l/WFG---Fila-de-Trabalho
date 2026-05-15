@@ -828,7 +828,13 @@ Vue.component("wfg-node-filters-panel", {
 				resolved = this.resolvePathValue(this.$$store, ref);
 			}
 		}
-		return Array.isArray(resolved) ? resolved : [];
+		const normalized = Array.isArray(resolved) ? resolved : [];
+		const filterKey = (it && (it.key || it.value)) ? String(it.key || it.value) : "";
+		if (filterKey === "idWFAtividadeRealizadaFinalizacao" && this.selectedRow && this.selectedRow.idwfprocesso) {
+			const processoId = String(this.selectedRow.idwfprocesso);
+			return normalized.filter((opt) => String(opt.idwfprocesso) === processoId);
+		}
+		return normalized;
 	},
 	buildWfgNodesForPersist() {
 		if (!this.selectedRow || !this.selectedRow.id || !this.ensureDrawflowEditor()) {

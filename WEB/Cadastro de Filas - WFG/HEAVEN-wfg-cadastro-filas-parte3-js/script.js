@@ -15,12 +15,14 @@ const store = new Vue({
 			optionsMetas: [],
 			optionsLocalEstoque: [],
 			optionsPontoExposicao: [],
+			optionsAtividadesRealizadas: [],
 
 			loadingProcessos: false,
 			loadingEmpresas: false,
 			loadingMercadologicos: false,
 			loadingMetas: false,
 			loadingLocalEstoque: false,
+			loadingAtividadesRealizadas: false,
 
 			tiposIntervalos: [
 				{ value: 0, label: "Segundo(s)" },
@@ -102,6 +104,17 @@ const store = new Vue({
 					})
 				});
 		},
+		getAtividadesRealizadas() {
+			return this.$$service.get({}, { scriptFunction: 'getAtividadesRealizadas' })
+				.then((response) => {
+					this.optionsAtividadesRealizadas = response;
+				})
+				.always(() => {
+					this.$nextTick(function () {
+						this.loadingAtividadesRealizadas = false;
+					})
+				});
+		},
 	},
 	created() {
 		
@@ -111,7 +124,8 @@ const store = new Vue({
 			this.getMercadologicos(),
 			this.getMetas(),
 			this.getLocalEstoque(),
-			this.getPontoExposicao()
+			this.getPontoExposicao(),
+			this.getAtividadesRealizadas()
 		])
 		.catch((error) => {
 			console.error("Erro ao carregar opcoes iniciais:", error);
@@ -223,6 +237,77 @@ const store = new Vue({
 			}
 		]
 	}
+</script_content>
+
+<script_content name="scriptAtividadeRealizadaFinalizacaoFilters">
+	{
+		label: "Atividade Realizada de Finalização",
+		items: [
+			{
+				key: "idWFAtividadeRealizadaFinalizacao",
+				label: "Atividade de Finalização",
+				type: "select",
+				options: '$$store.optionsAtividadesRealizadas',
+				placeholder: "Selecione a atividade realizada de finalização",
+				optional: false,
+				default: null,
+				disabled: false,
+			}
+		],
+	},
+	{
+		label: "Venda Dia Anterior",
+		items: [
+			{
+				key: "vendaDiaAnterior",
+				label: "Venda Dia Anterior",
+				type: "checkbox",
+				placeholder: "Venda Dia Anterior",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+		],
+	},
+	{
+		label: "Estoque",
+		items: [
+			{
+				key: "estoquePositivo",
+				label: "Estoque Positivo",
+				type: "checkbox",
+				placeholder: "Estoque Positivo",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+		],
+	},
+	{
+		label: "Ponto de Exposição",
+		items: [
+			{
+				key: "estoquePositivoPontoExposicao",
+				label: "Estoque Positivo Ponto de Exposição",
+				type: "checkbox",
+				placeholder: "Estoque Positivo Ponto de Exposição",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
+				key: "pontoExposicao",
+				label: "Ponto de Exposição",
+				type: "select",
+				options: '$$store.optionsPontoExposicao',
+				multiple: true,
+				placeholder: "Selecione os pontos de exposição",
+				optional: true,
+				default: null,
+				disabled: false,
+			},
+		]
+	},
 </script_content>
 
 <script_content name="scriptEstoqueNegativoFilters">
