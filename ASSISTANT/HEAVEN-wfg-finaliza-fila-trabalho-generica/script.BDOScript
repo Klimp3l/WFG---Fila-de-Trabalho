@@ -29,9 +29,9 @@ set filtroVendaDiaAnterior = '$v{vendaDiaAnterior#0}'.equals("0") ? "" : "and ex
 	Select 	null
 	From produtoresumo pr
 	Where
-		pr.idempresa = e.idempresa
+		pr.idempresa = x.idempresa
 		and pr.idproduto = p.idproduto
-		and pr.dataultimavenda >= (current_date - 1 as integer))
+		and pr.dataultimavenda >= (current_date - 1)
 )";
 
 ###########
@@ -50,7 +50,7 @@ set joinFiltroEstoque = !"$v{filtroEstoquePositivo}".equals("") ? """
 	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
 """ : "";
 set joinProdutoPontoExposicao = !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
-	inner join produtopontoexposicao ppe on (ppe.idproduto = p.idproduto and ppe.idempresa = e.idempresa)
+	inner join produtopontoexposicao ppe on (ppe.idproduto = p.idproduto and ppe.idempresa = x.idempresa)
 """ : "";
 
 #######################################
@@ -78,14 +78,14 @@ begin_transaction;
 				x.idempresa
 				,x.idproduto
 				,x.idwfocorrencia
-				,x.wffilatrabalho as idwffilatrabalhoanterior
+				,x.idwffilatrabalho as idwffilatrabalhoanterior
 			From
 				(
 				Select
-					e.idempresa
+					o.idempresa
 					,(o.chaves->>'idproduto')::bigint as idproduto
 					,o.idwfocorrencia
-					,ft.wffilatrabalho
+					,ft.idwffilatrabalho
 					
 					# -- Sequência de trabalho daquela ocorrência.
 					,dense_rank() over (partition by o.idwfocorrencia order by ft.idwffilatrabalho desc) as sequencia
@@ -112,7 +112,7 @@ begin_transaction;
 				x.idempresa
 				,x.idproduto
 				,x.idwfocorrencia
-				,x.wffilatrabalho
+				,x.idwffilatrabalho
 			Having
 				1=1
 
@@ -121,7 +121,7 @@ begin_transaction;
 
 				/* Filtros de Estoque Ponto de Exposição */
 				$v{filtroEstoquePositivoPontoExposicao}
-		),
+		)
 	Insert into WFFilatrabalho
 		(idwfocorrencia, idempresa, idwfatividade, idwfatividaderealizada, idwffilatrabalhoanterior, observacao, datainclusao, horainclusao, idtarefaexecucaoinclusao)
 	Select
