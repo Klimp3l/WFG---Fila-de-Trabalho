@@ -14,164 +14,223 @@
 
 	connect $v{ds_bridge};
 
+	set idUsuario = 10;
+
 	sql 
-	select 
-		e.idempresa as idempresa
-		,e.apelido as empresa
-		,p.idwfprocesso as idwfprocesso
-		,trim(p.descricao) as wfprocesso
-		,a.idwfatividade as idwfatividade
-		,trim(a.descricao) as wfatividade
-		,coalesce((
-			Select
-				json_agg(
-					json_build_object(
-						'idwffilatrabalho', ft.idwffilatrabalho,
-						'idwfocorrencia', o.idwfocorrencia,
-						'idempresa', e2.idempresa,
-						'empresa', coalesce(e2.apelido, e2.nomefantasia),
-						'idproduto', p.idproduto,
-						'codigobarras', p.codigobarras,
-						'produto', p.descricao,
-						'imagem', p.foto,
-						'idwfatividaderealizada', ft.idwfatividaderealizada,
-						'observacao',coalesce((Select ft2.observacao From wffilatrabalho ft2 Where ft2.idwffilatrabalho = ft.idwffilatrabalhoanterior), ''),
-						'datainclusao', ft.datainclusao::varchar,
-						'horainclusao', ft.horainclusao,
-						
-						'datavencimento', (o.valores->>'datavencimento')::varchar,
-						'dataprevisaosaida', (o.valores->>'dataprevisaosaida')::varchar,
-						'classificacao', (Case (o.valores->>'classificacao')::bigint
+	with atividades_base as (
+		select
+			e.idempresa as idempresa,
+			e.apelido as empresa,
+			p.idwfprocesso as idwfprocesso,
+			trim(p.descricao) as wfprocesso,
+			a.idwfatividade as idwfatividade,
+			trim(a.descricao) as wfatividade
+		from
+			wffilatrabalho f
+			inner join wfocorrencia o on o.idwfocorrencia = f.idwfocorrencia
+			inner join wfatividade a on a.idwfatividade = f.idwfatividade
+			inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
+			inner join empresa e on e.idempresa = f.idempresa
+		where
+			f.idusuarioresponsavel = $v{idUsuario}
+			and f.expirada = 'N'
+			and f.idwfatividaderealizada is null
+			and o.expirada = 'N'
+			and o.idwffilatrabalhofinalizacao is null
+			and o.apelidotarefaencaminhamento in (
+				'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico',
+				'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
+			)
+		group by
+			e.idempresa, e.apelido, p.idwfprocesso, p.descricao, a.idwfatividade, a.descricao
+	),
+	fila_base as (
+		select
+			ft.idwffilatrabalho,
+			ft.idwffilatrabalhoanterior,
+			ft.idwfocorrencia,
+			ft.idempresa,
+			ft.idwfatividade,
+			ft.idwfatividaderealizada,
+			ft.datainclusao,
+			ft.horainclusao,
+			o.idwfprocessoevento,
+			o.chaves,
+			o.valores,
+			(o.chaves->>'idproduto')::bigint as idproduto
+		from
+			wffilatrabalho ft
+			inner join wfocorrencia o on o.idwfocorrencia = ft.idwfocorrencia
+		where
+			ft.idusuarioresponsavel = $v{idUsuario}
+			and ft.idwfatividaderealizada is null
+			and o.idwffilatrabalhofinalizacao is null
+			and ft.expirada = 'N'
+			and o.expirada = 'N'
+	),
+	estoque_loja as (
+		select
+			esa.idempresa,
+			esa.idproduto,
+			sum(esa.quantidade) as qtdestoqueatual
+		from
+			estoquesaldoatual esa
+			inner join estoquelocal ecl on ecl.idlocalestoque = esa.idlocalestoque
+		where
+			ecl.localvenda = 'S'
+		group by
+			esa.idempresa, esa.idproduto
+	),
+	estoque_cd as (
+		select
+			ea.idproduto,
+			sum(ea.quantidade) as qtdestoqueatualcd
+		from
+			estoquesaldoatual ea
+		where
+			ea.idempresa in ($v{idempresaCD#0})
+		group by
+			ea.idproduto
+	),
+	fornecedor_produto as (
+		select
+			pf.idproduto,
+			min(pe.razaosocial) as fornecedor
+		from
+			produtofornecedor pf
+			inner join pessoa pe on pe.idpessoa = pf.idpessoa
+		where
+			pe.situacao = 'A'
+			and pe.fornecedor = 'T'
+		group by
+			pf.idproduto
+	),
+	recorrencia_120 as (
+		select
+			o2.idwfprocessoevento,
+			o2.idempresa,
+			(o2.chaves->>'idproduto')::bigint as idproduto,
+			count(distinct o2.idwfocorrencia) as recorrencia120dias
+		from
+			wfocorrencia o2
+		where
+			o2.datainclusao >= current_date - 120
+		group by
+			o2.idwfprocessoevento, o2.idempresa, (o2.chaves->>'idproduto')::bigint
+	),
+	produtos_por_atividade as (
+		select
+			fb.idwfatividade,
+			json_agg(
+				json_build_object(
+					'idwffilatrabalho', fb.idwffilatrabalho,
+					'idwfocorrencia', fb.idwfocorrencia,
+					'idempresa', e2.idempresa,
+					'empresa', coalesce(e2.apelido, e2.nomefantasia),
+					'idproduto', p.idproduto,
+					'codigobarras', p.codigobarras,
+					'produto', p.descricao,
+					'imagem', p.foto,
+					'idwfatividaderealizada', fb.idwfatividaderealizada,
+					'observacao', coalesce(ft2.observacao, ''),
+					'datainclusao', fb.datainclusao::varchar,
+					'horainclusao', fb.horainclusao,
+					'datavencimento', (fb.valores->>'datavencimento')::varchar,
+					'dataprevisaosaida', (fb.valores->>'dataprevisaosaida')::varchar,
+					'classificacao', (
+						case (fb.valores->>'classificacao')::bigint
 							when 0 then 'Baixo Risco'
 							when 1 then 'Medio Risco'
 							when 2 then 'Alto Risco'
 							else ''
-						end),
-						
-						'idfamilia', f.idfamilia,
-						'familia', f.descricao,
-						'idgrupo', g.idgrupo,
-						'grupo', g.descricao,
-						'idsetor', s.idsetor,
-						'setor', s.descricao,
-						'iddepartamento', d.iddepartamento,
-						'departamento', d.descricao,
-						
-						'classe', cp.classe,
-						'valorprecovenda', ppc.valorprecovenda,
-						'valorcustoaquisicao', ppc.valorcustoaquisicao,
-						
-						'diassemvenda', (current_date - 1) - pr.dataultimavenda,
-						'dataultimavenda', pr.dataultimavenda::varchar,
-						'qtdultimavenda', pr.qtdeultimavenda,
-						'diasentrada', (current_date - 1) - pr.dataultimaentrada,
-						'dataultimaentrada', pr.dataultimaentrada::varchar,
-						'qtdultimaentrada', pr.qtdeultimaentrada,
-
-						'qtdeabastecimento', (o.valores->>'qtdeabastecimento')::numeric,
-						'ruptura', (o.valores->>'ruptura')::numeric,
-						'qtdestoqueatual', coalesce((
-							Select
-								sum(esa.quantidade)
-							From
-								estoquesaldoatual esa 
-								inner join estoquelocal ecl on (ecl.idlocalestoque = esa.idlocalestoque)
-							Where 
-								esa.idproduto = (o.chaves->>'idproduto')::bigint
-								and esa.idempresa = o.idempresa 
-		                        and ecl.localvenda = 'S'
-						), (o.valores->>'estoquequantidade')::numeric),
-						'fornecedor', coalesce((
-							Select
-								p.razaosocial
-							From
-								produtofornecedor pf
-								inner join pessoa p on (p.idpessoa = pf.idpessoa)
-							Where
-								pf.idproduto = (o.chaves->>'idproduto')::bigint
-								and p.situacao = 'A'
-								and p.fornecedor = 'T'
-							Limit 1
-						), ''),
-						'qtdvendamedia', pg.girodiareal,
-						'qtdestoqueatualcd', coalesce((
-							Select	sum(ea.quantidade)
-							From	estoquesaldoatual ea
-							Where	ea.idempresa in ($v{idempresaCD#0})
-									and ea.idproduto = (o.chaves->>'idproduto')::bigint
-						),0),
-						'qtdunentrada', p.qtdunentrada,
-						'recorrencia120dias', coalesce((
-							Select	count(distinct o2.idwfocorrencia)
-							From	wfocorrencia o2
-							Where	o2.idwfprocessoevento = o.idwfprocessoevento
-									and o2.idempresa = o.idempresa
-									and (o2.chaves->>'idproduto')::bigint = (o.chaves->>'idproduto')::bigint
-									and o2.datainclusao >= current_date-120
-						),0)
-					)
-				) as filas
-			From
-				wffilatrabalho ft 
-				inner join wfocorrencia o on o.idwfocorrencia = ft.idwfocorrencia
-				inner join empresa e2 on (e2.idempresa = o.idempresa)
-				inner join produto p on p.idproduto = (o.chaves->>'idproduto')::bigint
-				left join produtogiro pg on pg.idproduto = p.idproduto and pg.idempresa = o.idempresa and pg.dias = 90 and pg.tipogiro = 'V'
-				left join produtoprecocusto ppc on ppc.idproduto = p.idproduto and ppc.idempresa = o.idempresa
-				left join produtoresumo pr on pr.idproduto = p.idproduto and pr.idempresa = o.idempresa
-				left join familia f on f.idfamilia = p.idfamilia
-				left join grupo g on g.idgrupo = p.idgrupo
-				left join setor s on s.idsetor = p.idsetor
-				left join departamento d on d.iddepartamento = p.iddepartamento
-				left join classeproduto cp on
-					cp.idempresa = o.idempresa
-					and cp.idproduto = p.idproduto
-					and cp.idmercadologico = '0' /* #! 0 = Geral, Não é separado por mercadológico */
-					and cp.tipoanalise = 'G' /* #! Classificação do produto por quantidade de saída */
-			Where
-				ft.idusuarioresponsavel = $v{idUsuario}
-				and ft.idwfatividaderealizada is null
-				and o.idwffilatrabalhofinalizacao is null
-				and ft.idwfatividade = a.idwfatividade
-				and ft.idempresa = e2.idempresa
-				and ft.expirada = 'N'
-				and o.expirada = 'N'
-		), '[]') as produtos
-		,coalesce((
-			Select
-				json_agg(
-					json_build_object(
-						'idwfatividaderealizada', ar.idwfatividaderealizada,
-						'atividaderealizada', ar.descricao||coalesce(' -> '||a2.descricao, '')
-					)
+						end
+					),
+					'idfamilia', f.idfamilia,
+					'familia', f.descricao,
+					'idgrupo', g.idgrupo,
+					'grupo', g.descricao,
+					'idsetor', s.idsetor,
+					'setor', s.descricao,
+					'iddepartamento', d.iddepartamento,
+					'departamento', d.descricao,
+					'classe', cp.classe,
+					'valorprecovenda', ppc.valorprecovenda,
+					'valorcustoaquisicao', ppc.valorcustoaquisicao,
+					'diassemvenda', (current_date - 1) - pr.dataultimavenda,
+					'dataultimavenda', pr.dataultimavenda::varchar,
+					'qtdultimavenda', pr.qtdeultimavenda,
+					'diasentrada', (current_date - 1) - pr.dataultimaentrada,
+					'dataultimaentrada', pr.dataultimaentrada::varchar,
+					'qtdultimaentrada', pr.qtdeultimaentrada,
+					'qtdeabastecimento', (fb.valores->>'qtdeabastecimento')::numeric,
+					'ruptura', (fb.valores->>'ruptura')::numeric,
+					'qtdestoqueatual', coalesce(el.qtdestoqueatual, (fb.valores->>'estoquequantidade')::numeric),
+					'fornecedor', coalesce(fp.fornecedor, ''),
+					'qtdvendamedia', pg.girodiareal,
+					'qtdestoqueatualcd', coalesce(ec.qtdestoqueatualcd, 0),
+					'qtdunentrada', p.qtdunentrada,
+					'recorrencia120dias', coalesce(r120.recorrencia120dias, 0)
 				)
-			from
-				wfatividaderealizada ar
-				left join wfatividade a2 on (a2.idwfatividade = ar.idwfatividadeproxima)
-			where
-				ar.idwfatividade = a.idwfatividade
-		), '[]') as atividadeselegiveis
-	from 
-		wfatividade a
-		inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
-		cross join empresa e
-	where 
-		exists (
-			select 	null 
-			from 	wffilatrabalho f 
-					inner join wfocorrencia o on o.idwfocorrencia = f.idwfocorrencia
-			where 	
-				f.idusuarioresponsavel = $v{idUsuario}
-				and f.idwfatividaderealizada is null 
-				and f.expirada = 'N'
-				and o.expirada = 'N'
-				and o.idwffilatrabalhofinalizacao is null
-				and o.apelidotarefaencaminhamento = 'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
-				and f.idwfatividade = a.idwfatividade
-				and f.idempresa = e.idempresa
-		) 
-	order by 
-		wfprocesso, wfatividade
+			) as produtos
+		from
+			fila_base fb
+			inner join empresa e2 on e2.idempresa = fb.idempresa
+			inner join produto p on p.idproduto = fb.idproduto
+			left join wffilatrabalho ft2 on ft2.idwffilatrabalho = fb.idwffilatrabalhoanterior
+			left join produtogiro pg on pg.idproduto = p.idproduto and pg.idempresa = fb.idempresa and pg.dias = 90 and pg.tipogiro = 'V'
+			left join produtoprecocusto ppc on ppc.idproduto = p.idproduto and ppc.idempresa = fb.idempresa
+			left join produtoresumo pr on pr.idproduto = p.idproduto and pr.idempresa = fb.idempresa
+			left join familia f on f.idfamilia = p.idfamilia
+			left join grupo g on g.idgrupo = p.idgrupo
+			left join setor s on s.idsetor = p.idsetor
+			left join departamento d on d.iddepartamento = p.iddepartamento
+			left join classeproduto cp on (
+				cp.idempresa = fb.idempresa
+				and cp.idproduto = p.idproduto
+				and cp.idmercadologico = '0' /* #! 0 = Geral, Não é separado por mercadológico */
+				and cp.tipoanalise = 'G' /* #! Classificação do produto por quantidade de saída */
+			)
+			left join estoque_loja el on el.idempresa = fb.idempresa and el.idproduto = fb.idproduto
+			left join estoque_cd ec on ec.idproduto = fb.idproduto
+			left join fornecedor_produto fp on fp.idproduto = fb.idproduto
+			left join recorrencia_120 r120 on (
+				r120.idwfprocessoevento = fb.idwfprocessoevento
+				and r120.idempresa = fb.idempresa
+				and r120.idproduto = fb.idproduto
+			)
+		group by
+			fb.idwfatividade
+	),
+	atividades_elegiveis as (
+		select
+			ar.idwfatividade,
+			json_agg(
+				json_build_object(
+					'idwfatividaderealizada', ar.idwfatividaderealizada,
+					'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, '')
+				)
+			) as atividadeselegiveis
+		from
+			wfatividaderealizada ar
+			left join wfatividade a2 on a2.idwfatividade = ar.idwfatividadeproxima
+		group by
+			ar.idwfatividade
+	)
+	select
+		ab.idempresa as idempresa,
+		ab.empresa as empresa,
+		ab.idwfprocesso as idwfprocesso,
+		ab.wfprocesso as wfprocesso,
+		ab.idwfatividade as idwfatividade,
+		ab.wfatividade as wfatividade,
+		coalesce(pa.produtos, '[]') as produtos,
+		coalesce(ae.atividadeselegiveis, '[]') as atividadeselegiveis
+	from
+		atividades_base ab
+		left join produtos_por_atividade pa on pa.idwfatividade = ab.idwfatividade
+		left join atividades_elegiveis ae on ae.idwfatividade = ab.idwfatividade
+	order by
+		ab.wfprocesso, ab.wfatividade
 	sql_var(sqlAtividades) sql_props(lower_labels);
 
 	<!--output-->
