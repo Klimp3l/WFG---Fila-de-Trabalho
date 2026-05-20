@@ -17,40 +17,18 @@
 	set idUsuario = 10;
 
 	sql 
-	with atividades_base as (
+	with 
+	wbase as (
 		select
 			e.idempresa as idempresa,
-			e.apelido as empresa,
+			coalesce(e.apelido, e.nomefantasia) as empresa,
 			p.idwfprocesso as idwfprocesso,
 			trim(p.descricao) as wfprocesso,
 			a.idwfatividade as idwfatividade,
-			trim(a.descricao) as wfatividade
-		from
-			wffilatrabalho f
-			inner join wfocorrencia o on o.idwfocorrencia = f.idwfocorrencia
-			inner join wfatividade a on a.idwfatividade = f.idwfatividade
-			inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
-			inner join empresa e on e.idempresa = f.idempresa
-		where
-			f.idusuarioresponsavel = $v{idUsuario}
-			and f.expirada = 'N'
-			and f.idwfatividaderealizada is null
-			and o.expirada = 'N'
-			and o.idwffilatrabalhofinalizacao is null
-			and o.apelidotarefaencaminhamento in (
-				'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico',
-				'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
-			)
-		group by
-			e.idempresa, e.apelido, p.idwfprocesso, p.descricao, a.idwfatividade, a.descricao
-	),
-	fila_base as (
-		select
+			trim(a.descricao) as wfatividade,
 			ft.idwffilatrabalho,
 			ft.idwffilatrabalhoanterior,
 			ft.idwfocorrencia,
-			ft.idempresa,
-			ft.idwfatividade,
 			ft.idwfatividaderealizada,
 			ft.datainclusao,
 			ft.horainclusao,
@@ -61,176 +39,322 @@
 		from
 			wffilatrabalho ft
 			inner join wfocorrencia o on o.idwfocorrencia = ft.idwfocorrencia
+			inner join wfatividade a on a.idwfatividade = ft.idwfatividade
+			inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
+			inner join empresa e on e.idempresa = ft.idempresa
 		where
 			ft.idusuarioresponsavel = $v{idUsuario}
 			and ft.idwfatividaderealizada is null
 			and o.idwffilatrabalhofinalizacao is null
 			and ft.expirada = 'N'
 			and o.expirada = 'N'
-	),
-	estoque_loja as (
-		select
-			esa.idempresa,
-			esa.idproduto,
-			sum(esa.quantidade) as qtdestoqueatual
-		from
-			estoquesaldoatual esa
-			inner join estoquelocal ecl on ecl.idlocalestoque = esa.idlocalestoque
-		where
-			ecl.localvenda = 'S'
-		group by
-			esa.idempresa, esa.idproduto
-	),
-	estoque_cd as (
-		select
-			ea.idproduto,
-			sum(ea.quantidade) as qtdestoqueatualcd
-		from
-			estoquesaldoatual ea
-		where
-			ea.idempresa in ($v{idempresaCD#0})
-		group by
-			ea.idproduto
-	),
-	fornecedor_produto as (
-		select
-			pf.idproduto,
-			min(pe.razaosocial) as fornecedor
-		from
-			produtofornecedor pf
-			inner join pessoa pe on pe.idpessoa = pf.idpessoa
-		where
-			pe.situacao = 'A'
-			and pe.fornecedor = 'T'
-		group by
-			pf.idproduto
-	),
-	recorrencia_120 as (
-		select
-			o2.idwfprocessoevento,
-			o2.idempresa,
-			(o2.chaves->>'idproduto')::bigint as idproduto,
-			count(distinct o2.idwfocorrencia) as recorrencia120dias
-		from
-			wfocorrencia o2
-		where
-			o2.datainclusao >= current_date - 120
-		group by
-			o2.idwfprocessoevento, o2.idempresa, (o2.chaves->>'idproduto')::bigint
-	),
-	produtos_por_atividade as (
-		select
-			fb.idwfatividade,
-			json_agg(
-				json_build_object(
-					'idwffilatrabalho', fb.idwffilatrabalho,
-					'idwfocorrencia', fb.idwfocorrencia,
-					'idempresa', e2.idempresa,
-					'empresa', coalesce(e2.apelido, e2.nomefantasia),
-					'idproduto', p.idproduto,
-					'codigobarras', p.codigobarras,
-					'produto', p.descricao,
-					'imagem', p.foto,
-					'idwfatividaderealizada', fb.idwfatividaderealizada,
-					'observacao', coalesce(ft2.observacao, ''),
-					'datainclusao', fb.datainclusao::varchar,
-					'horainclusao', fb.horainclusao,
-					'datavencimento', (fb.valores->>'datavencimento')::varchar,
-					'dataprevisaosaida', (fb.valores->>'dataprevisaosaida')::varchar,
-					'classificacao', (
-						case (fb.valores->>'classificacao')::bigint
-							when 0 then 'Baixo Risco'
-							when 1 then 'Medio Risco'
-							when 2 then 'Alto Risco'
-							else ''
-						end
-					),
-					'idfamilia', f.idfamilia,
-					'familia', f.descricao,
-					'idgrupo', g.idgrupo,
-					'grupo', g.descricao,
-					'idsetor', s.idsetor,
-					'setor', s.descricao,
-					'iddepartamento', d.iddepartamento,
-					'departamento', d.descricao,
-					'classe', cp.classe,
-					'valorprecovenda', ppc.valorprecovenda,
-					'valorcustoaquisicao', ppc.valorcustoaquisicao,
-					'diassemvenda', (current_date - 1) - pr.dataultimavenda,
-					'dataultimavenda', pr.dataultimavenda::varchar,
-					'qtdultimavenda', pr.qtdeultimavenda,
-					'diasentrada', (current_date - 1) - pr.dataultimaentrada,
-					'dataultimaentrada', pr.dataultimaentrada::varchar,
-					'qtdultimaentrada', pr.qtdeultimaentrada,
-					'qtdeabastecimento', (fb.valores->>'qtdeabastecimento')::numeric,
-					'ruptura', (fb.valores->>'ruptura')::numeric,
-					'qtdestoqueatual', coalesce(el.qtdestoqueatual, (fb.valores->>'estoquequantidade')::numeric),
-					'fornecedor', coalesce(fp.fornecedor, ''),
-					'qtdvendamedia', pg.girodiareal,
-					'qtdestoqueatualcd', coalesce(ec.qtdestoqueatualcd, 0),
-					'qtdunentrada', p.qtdunentrada,
-					'recorrencia120dias', coalesce(r120.recorrencia120dias, 0)
-				)
-			) as produtos
-		from
-			fila_base fb
-			inner join empresa e2 on e2.idempresa = fb.idempresa
-			inner join produto p on p.idproduto = fb.idproduto
-			left join wffilatrabalho ft2 on ft2.idwffilatrabalho = fb.idwffilatrabalhoanterior
-			left join produtogiro pg on pg.idproduto = p.idproduto and pg.idempresa = fb.idempresa and pg.dias = 90 and pg.tipogiro = 'V'
-			left join produtoprecocusto ppc on ppc.idproduto = p.idproduto and ppc.idempresa = fb.idempresa
-			left join produtoresumo pr on pr.idproduto = p.idproduto and pr.idempresa = fb.idempresa
-			left join familia f on f.idfamilia = p.idfamilia
-			left join grupo g on g.idgrupo = p.idgrupo
-			left join setor s on s.idsetor = p.idsetor
-			left join departamento d on d.iddepartamento = p.iddepartamento
-			left join classeproduto cp on (
-				cp.idempresa = fb.idempresa
-				and cp.idproduto = p.idproduto
-				and cp.idmercadologico = '0' /* #! 0 = Geral, Não é separado por mercadológico */
-				and cp.tipoanalise = 'G' /* #! Classificação do produto por quantidade de saída */
+			and o.apelidotarefaencaminhamento in (
+				'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico',
+				'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
 			)
-			left join estoque_loja el on el.idempresa = fb.idempresa and el.idproduto = fb.idproduto
-			left join estoque_cd ec on ec.idproduto = fb.idproduto
-			left join fornecedor_produto fp on fp.idproduto = fb.idproduto
-			left join recorrencia_120 r120 on (
-				r120.idwfprocessoevento = fb.idwfprocessoevento
-				and r120.idempresa = fb.idempresa
-				and r120.idproduto = fb.idproduto
-			)
-		group by
-			fb.idwfatividade
-	),
-	atividades_elegiveis as (
-		select
-			ar.idwfatividade,
-			json_agg(
-				json_build_object(
-					'idwfatividaderealizada', ar.idwfatividaderealizada,
-					'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, '')
-				)
-			) as atividadeselegiveis
-		from
-			wfatividaderealizada ar
-			left join wfatividade a2 on a2.idwfatividade = ar.idwfatividadeproxima
-		group by
-			ar.idwfatividade
 	)
 	select
-		ab.idempresa as idempresa,
-		ab.empresa as empresa,
-		ab.idwfprocesso as idwfprocesso,
-		ab.wfprocesso as wfprocesso,
-		ab.idwfatividade as idwfatividade,
-		ab.wfatividade as wfatividade,
-		coalesce(pa.produtos, '[]') as produtos,
-		coalesce(ae.atividadeselegiveis, '[]') as atividadeselegiveis
+		wb.idempresa as idempresa,
+		wb.empresa as empresa,
+		wb.idwfprocesso as idwfprocesso,
+		wb.wfprocesso as wfprocesso,
+		wb.idwfatividade as idwfatividade,
+		wb.wfatividade as wfatividade,
+		json_agg(
+			json_build_object(
+				'idwffilatrabalho', wb.idwffilatrabalho,
+				'idwfocorrencia', wb.idwfocorrencia,
+				'idempresa', wb.idempresa,
+				'empresa', wb.empresa,
+				'idproduto', p.idproduto,
+				'codigobarras', p.codigobarras,
+				'produto', p.descricao,
+				'imagem', p.foto,
+				'idwfatividaderealizada', wb.idwfatividaderealizada,
+				'datainclusao', wb.datainclusao::varchar,
+				'horainclusao', wb.horainclusao,
+				
+				/* Buscado na hora */
+				'idfamilia', f.idfamilia,
+				'familia', f.descricao,
+				'idgrupo', g.idgrupo,
+				'grupo', g.descricao,
+				'idsetor', s.idsetor,
+				'setor', s.descricao,
+				'iddepartamento', d.iddepartamento,
+				'departamento', d.descricao,
+				'qtdunentrada', p.qtdunentrada,
+				
+				'classe', cp.classe,
+				'valorprecovenda', ppc.valorprecovenda,
+				'diassemvenda', (current_date-1) - pr.dataultimavenda,
+				'diasentrada', (current_date-1) - pr.dataultimaentrada,
+				'dataultimaentrada', to_char(pr.dataultimaentrada, 'yyyy-mm-dd'),
+				'dataultimavenda', to_char(pr.dataultimavenda, 'yyyy-mm-dd'),
+				'qtdultimaentrada', pr.qtdeultimaentrada,
+				'qtdeultimavenda', pr.qtdeultimavenda,
+				'valorcustoaquisicao', ppc.valorcustoaquisicao,
+				'qtdvendamedia', pg.girodiareal,
+				'observacao', coalesce((
+					Select ft.observacao 
+					From wffilatrabalho ft 
+					Where ft.idwffilatrabalho = wb.idwffilatrabalhoanterior
+				), ''),
+				'fornecedor', (	
+					Select
+						p.razaosocial
+					From
+						produtofornecedor pf
+						inner join pessoa p on p.idpessoa = pf.idpessoa
+					Where
+						pf.idproduto = wb.idproduto
+						and p.situacao = 'A'
+						and p.fornecedor = 'T'
+					limit 1
+				),
+				'qtdestoqueatual', coalesce((
+					Select sum(esa.quantidade) 
+					From 	
+						estoquesaldoatual esa 
+						inner join estoquelocal ecl on (ecl.idlocalestoque = esa.idlocalestoque)
+					Where 
+						esa.idproduto = p.idproduto 
+						and esa.idempresa = wb.idempresa 
+						and ecl.localvenda = 'S'
+				), (wb.valores->>'estoquequantidade')::numeric),
+				'qtdestoqueatualcd', coalesce((
+					Select sum(esa.quantidade) 
+					From 	
+						estoquesaldoatual esa 
+					Where 
+						esa.idproduto = p.idproduto 
+						and esa.idempresa in ($v{idempresaCD#0})
+				), 0),
+
+				
+				/* Vem da geração de fila trabalho */
+				'datavencimento', (wb.valores->>'datavencimento')::varchar,
+				'dataprevisaosaida', (wb.valores->>'dataprevisaosaida')::varchar,
+				'classificacao', wb.valores->>'classificacao',
+				'qtdeabastecimento', wb.valores->>'qtdeabastecimento',
+				'qtdeabastecer', wb.valores->>'ruptura',
+				'estoquequantidade', wb.valores->>'estoquequantidade',
+				'qtdultinventario', wb.valores->>'qtdultinventario',
+				'qtdproducaobandeja', wb.valores->>'qtdproducaobandeja',
+				'percentualabastecimento', wb.valores->>'percentualabastecimento',
+				'capacidade', wb.valores->>'capacidade'
+			)
+		) as produtos
+		
+		,coalesce((
+			Select
+				json_agg(
+					json_build_object(
+						'idwfatividaderealizada', ar.idwfatividaderealizada,
+						'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, '')
+					)
+				) as atividadeselegiveis
+			from
+				wfatividaderealizada ar
+				left join wfatividade a2 on a2.idwfatividade = ar.idwfatividadeproxima
+			Where
+				ar.idwfatividade = wb.idwfatividade
+		), '[]') as atividadeselegiveis
+		/* Columns */
+		,json_build_object(
+			'produto', json_build_object(
+				'label', 'Produto',
+				'type', 'input',
+				'searchable', true,
+				'sortable', true,
+				'defaultVisible', true
+			),
+			'idproduto', json_build_object(
+				'label', 'ID Produto',
+				'type', 'inputNumber',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-genderless',
+				'defaultVisible', true
+			),
+			'codigobarras', json_build_object(
+				'label', 'Código barras',
+				'type', 'input',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-barcode',
+				'defaultVisible', true
+			),
+			'classe', json_build_object(
+				'label', 'Classe',
+				'type', 'multipleSelect',
+				'options', ARRAY['A', 'B', 'C'],
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-layer-group'
+			),
+			'fornecedor', json_build_object(
+				'label', 'Fornecedor',
+				'type', 'input',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-truck-fast'
+			),
+			'qtdestoqueatual', json_build_object(
+				'label', 'Estoque atual',
+				'type', 'inputNumber',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-boxes-stacked',
+				'defaultVisible', true
+			),
+			'estoquequantidade', json_build_object(
+				'label', 'Estoque quantidade',
+				'type', 'inputNumber',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-boxes-stacked'
+			),
+			'diassemvenda', json_build_object(
+				'label', 'Dias sem venda',
+				'type', 'inputNumber',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-calendar-days'
+			),
+			'diasentrada', json_build_object(
+				'label', 'Dias entrada',
+				'type', 'inputNumber',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-calendar-days'
+			),
+			'dataultimavenda', json_build_object(
+				'label', 'Data última venda',
+				'type', 'date',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-calendar-days'
+			),
+			'dataultimaentrada', json_build_object(
+				'label', 'Data última entrada',
+				'type', 'date',
+				'searchable', true,
+				'sortable', true,
+				'icon', 'fa-solid fa-calendar-day'
+			),
+			'valorprecovenda', json_build_object(
+				'label', 'Valor preço venda',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-money-bill-wave',
+				'defaultVisible', true
+			),
+			'qtdultimaentrada', json_build_object(
+				'label', 'Quantidade última entrada',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-dolly'
+			),
+			'qtdeultimavenda', json_build_object(
+				'label', 'Quantidade última venda',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-dollar-sign'
+			),
+			'valorcustoaquisicao', json_build_object(
+				'label', 'Valor custo aquisição',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-hand-holding-dollar'
+			),
+			'qtdvendamedia', json_build_object(
+				'label', 'Quantidade venda média',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-cart-shopping'
+			),
+			'qtdproducaobandeja', json_build_object(
+				'label', 'Qtde produção bandeja',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-kitchen-set'
+			),
+			'percentualabastecimento', json_build_object(
+				'label', 'Percentual abastecimento',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-percent'
+			),
+			'capacidade', json_build_object(
+				'label', 'Capacidade',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-cubes'
+			),
+			'qtdeabastecer', json_build_object(
+				'label', 'Qtde abastecer',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-box-open'
+			),
+			'qtdultinventario', json_build_object(
+				'label', 'Qtde último inventário',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-boxes-packing'
+			),
+			'qtdestoqueatualcd', json_build_object(
+				'label', 'Estoque atual CD',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-warehouse'
+			),
+			'qtdunentrada', json_build_object(
+				'label', 'Quantidade unidade entrada',
+				'type', 'inputNumber',
+				'searchable', false,
+				'sortable', true,
+				'icon', 'fa-solid fa-dolly'
+			)
+		) as columns
 	from
-		atividades_base ab
-		left join produtos_por_atividade pa on pa.idwfatividade = ab.idwfatividade
-		left join atividades_elegiveis ae on ae.idwfatividade = ab.idwfatividade
+		wbase wb
+		inner join produto p on p.idproduto = wb.idproduto
+		left join familia f on f.idfamilia = p.idfamilia
+		left join grupo g on g.idgrupo = p.idgrupo
+		left join setor s on s.idsetor = p.idsetor
+		left join departamento d on d.iddepartamento = p.iddepartamento
+		left join classeproduto cp on (
+			cp.idempresa = wb.idempresa
+			and cp.idproduto = p.idproduto
+			and cp.idmercadologico = '0' /* #! 0 = Geral, Não é separado por mercadológico */
+			and cp.tipoanalise = 'G' /* #! Classificação do produto por quantidade de saída */
+		)
+		left join produtoresumo pr on (pr.idproduto = p.idproduto and pr.idempresa = wb.idempresa)
+		left join produtogiro pg on (pg.idproduto = p.idproduto and pg.idempresa = wb.idempresa and pg.dias = 90 and pg.tipogiro = 'V')
+		left join produtoprecocusto ppc on (ppc.idproduto = p.idproduto and ppc.idempresa = wb.idempresa)
+	group by
+		wb.idempresa
+		,wb.empresa
+		,wb.idwfprocesso
+		,wb.wfprocesso
+		,wb.idwfatividade
+		,wb.wfatividade
 	order by
-		ab.wfprocesso, ab.wfatividade
+		wb.wfprocesso
+		,wb.wfatividade
 	sql_var(sqlAtividades) sql_props(lower_labels);
 
 	<!--output-->
