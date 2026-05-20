@@ -151,7 +151,8 @@
 				json_agg(
 					json_build_object(
 						'idwfatividaderealizada', ar.idwfatividaderealizada,
-						'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, '')
+						'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, ''),
+						'tiposituacao', ar.tiposituacao
 					)
 				) as atividadeselegiveis
 			from
@@ -364,38 +365,6 @@
 	$> sb.append('{"atividades":[').append(msgBuilder.sqlVarToJSON('sqlAtividades')).append(']}');
 </script_function>
 
-<script_function name="getAtividadeRealizada">
-	~write_exec_log;
-	set run = ''+execScript.getTarefaExecucao().setObs('getAtividadeRealizada -  $v{usuario}');
-
-	connect $v{ds_bridge};
-
-	sql 
-	select
-		a.idwfatividade as idwfatividade
-		,a.descricao as wfatividade
-		,coalesce((
-			select 
-				json_agg(
-					json_build_object(
-						'idwfatividaderealizada', ar.idwfatividaderealizada,
-						'descricao', ar.descricao
-					)
-				) 
-			from wfatividaderealizada ar 
-			where ar.idwfatividade = a.idwfatividade
-			), '[]') as atividadesrealizadas
-	from
-		wfatividade a
-	sql_var(sqlAtividadeRealizada) sql_props(lower_labels);
-
-	<!--output-->
-	$> msgBuilder.setContentType('application/json');
-	$> msgBuilder.setContentEncoding('gzip');
-	$> msgBuilder.setCharset('UTF-8');
-	$> sb.append('[').append(msgBuilder.sqlVarToJSON('sqlAtividadeRealizada')).append(']');
-</script_function>
-
 <script_function name="update">
 	~write_exec_log;
 	set run = ''+execScript.getTarefaExecucao().setObs('update -  $v{usuario}');
@@ -419,11 +388,14 @@
 		import groovy.json.JsonSlurper;
 		import bdo.util.SQLUtilX;
 
-		def objArray = new JsonSlurper().parseText(execScript.getValueVar('wffilatrabalho'));
-		
+		def atividade = new JsonSlurper().parseText(execScript.getValueVar('wffilatrabalho'));
+
 		String execId = execScript.getValueVar('execId');
 		String dataAtual = execScript.getValueVar('dataAtual');
 		String horaAtual = execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
+
+		Boolean hasAtividadeFinalizacao = false;
+		StringBuilder idWFFilatrabalhoFinalizacao = new StringBuilder();
 
 		String msg1 = execScript.getValueVar('msg1');
 		String msg2 = execScript.getValueVar('msg2');
@@ -439,12 +411,16 @@
 				
 		String response = '';
 
-		for (obj in objArray) {
-			if (obj.idwfatividaderealizada) {
+		for (obj in atividade.encaminhamentos) {
+			if (obj.idwfatividadeencaminhamento) {
 
-				sqlUtilX.setIndex(-1)
-					.setIndexPK(-1)
-					.setInt(obj.idwfatividaderealizada)
+				if (obj.tiposituacao.equals('F')) {
+					hasAtividadeFinalizacao = true;
+					idWFFilatrabalhoFinalizacao.append(obj.idwffilatrabalho).append(',');
+				}
+
+				sqlUtilX.setIndex(-1).setIndexPK(-1)
+					.setInt(obj.idwfatividadeencaminhamento)
 					.setString(obj.observacao)
 					.setIntPK(obj.idwffilatrabalho);
 					
@@ -456,13 +432,19 @@
 			}
 		}
 
+		idWFFilatrabalhoFinalizacao.deleteCharAt(idWFFilatrabalhoFinalizacao.length() - 1);
+
 		execScript.addVar('response', response);
+		execScript.addVar('hasAtividadeFinalizacao', hasAtividadeFinalizacao);
+		execScript.addVar('idWFFilatrabalho', idWFFilatrabalhoFinalizacao.toString());
 
 		return true;
 	</script_java_groovy>
 
-	# Finaliza as ocorrências
-	$include{script:HEAVEN-wfg-finaliza-wfocorrencia-include}include
+	if '$v{hasAtividadeFinalizacao}'.equals('true');
+		# Finaliza as ocorrências
+		$include{script:HEAVEN-wfg-finaliza-wfocorrencia-include}include
+	end_if;
 
 	# Gera fila trabalho
 	$include{
