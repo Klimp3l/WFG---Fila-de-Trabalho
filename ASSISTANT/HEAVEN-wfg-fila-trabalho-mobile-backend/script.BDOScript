@@ -14,8 +14,6 @@
 
 	connect $v{ds_bridge};
 
-	set idUsuario = 10;
-
 	sql 
 	with 
 	wbase as (
