@@ -430,7 +430,9 @@
 			}
 		}
 
-		idWFFilatrabalhoFinalizacao.deleteCharAt(idWFFilatrabalhoFinalizacao.length() - 1);
+		if (idWFFilatrabalhoFinalizacao.length() > 0 && idWFFilatrabalhoFinalizacao.charAt(idWFFilatrabalhoFinalizacao.length() - 1) == ',') {
+			idWFFilatrabalhoFinalizacao.deleteCharAt(idWFFilatrabalhoFinalizacao.length() - 1);
+		}
 
 		execScript.addVar('response', response);
 		execScript.addVar('hasAtividadeFinalizacao', hasAtividadeFinalizacao);
