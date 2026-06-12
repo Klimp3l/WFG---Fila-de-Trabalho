@@ -86,6 +86,20 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 //	        });
 
 			$> sb.append('var tiposituacao = [' + msgBuilder.sqlVarToJSON('sql_tiposituacao') + '];\n');
+			$> sb.append('var atividadesIniciaisTransferirPorEvento = [' + msgBuilder.sqlVarToJSON('sql_wfatividadeinicialtransferir_porevento') + '];\n');
+
+			function carregarAtividadeInicialTransferirPorEvento(idEventoSelecionado) {
+				var $atividadeInicialTransferir = $("#idwfatividadeinicialtransferir");
+				$atividadeInicialTransferir.empty();
+				$atividadeInicialTransferir.append($("<option>", { value: "", text: "" }));
+
+				for (var i = 0; i < atividadesIniciaisTransferirPorEvento.length; i++) {
+					var item = atividadesIniciaisTransferirPorEvento[i];
+					if (item.idwfprocessoeventotransferir == idEventoSelecionado) {
+						$atividadeInicialTransferir.append($("<option>", { value: item.idwfatividadeinicialtransferir, text: item.descricao }));
+					}
+				}
+			}
 
 			setOdwW2UIGridOptions({	idTarefaCRUD: ~~~, -> $c{IDTAREFACRUD};
 								    idInput: "#idwfatividaderealizada", firstFocusInput: "#descricao",
@@ -249,6 +263,23 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 				}
 			});
 			actionInsert();			
+			$("#idwfprocessoeventotransferir").change(function() {
+				carregarAtividadeInicialTransferirPorEvento($(this).val());
+			});
+
+			var oldDisplayData = displayData;
+			displayData = function(record) {
+				oldDisplayData(record);
+				carregarAtividadeInicialTransferirPorEvento(record.idwfprocessoeventotransferir || "");
+				$("#idwfatividadeinicialtransferir").val(record.idwfatividadeinicialtransferir || "");
+			};
+
+			var oldClearData = clearData;
+			clearData = function() {
+				oldClearData();
+				carregarAtividadeInicialTransferirPorEvento($("#idwfprocessoeventotransferir").val() || "");
+				$("#idwfatividadeinicialtransferir").val("");
+			};
 		});
 	</script>
 
@@ -306,6 +337,17 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 						<td class="input-label">Impacto</td>
 						<td>
 							$> msgBuilder.parameter('idwfimpacto values="sql_var(sql_wfimpacto)" custom="odw=\\\"input\\\""');
+						</td>
+					</tr>
+					<tr>
+						<td class="input-label">Processo Evento para Transferência Novo Processo</td>
+						<td>
+							$> msgBuilder.parameter('idwfprocessoeventotransferir values="sql_var(sql_wfprocessoeventotransferir)" custom="odw=\\\"input\\\""');
+						</td>
+						<td></td>
+						<td class="input-label">Atividade Inicial para Transf. Novo Processo</td>
+						<td>
+							$> msgBuilder.parameter('idwfatividadeinicialtransferir values="sql_var(sql_wfatividadeinicialtransferir)" custom="odw=\\\"input\\\""');
 						</td>
 					</tr>
 				</table>

@@ -41,7 +41,7 @@ begin_transaction;
 				,ft.idtarefaexecucaoatividaderealizada
 				,ar.tiposituacao
 
-				# -- Sequência de trabalho daquela ocorrência.
+				-- # Sequência de trabalho daquela ocorrência.
 				,dense_rank() over (partition by o.idwfocorrencia order by ft.idwffilatrabalho desc) as sequencia
 			From 
 				wfocorrencia o

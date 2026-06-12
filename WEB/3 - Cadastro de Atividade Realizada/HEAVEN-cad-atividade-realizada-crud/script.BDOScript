@@ -1,5 +1,5 @@
 ~not_save_exec;
-# versao 2.2
+# versao 2.3
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
@@ -7,6 +7,7 @@
 # | 21/02/2017 | Lucas       |             |             | Adicionado flowdata.
 # | 26/04/2017 | Lucas       |             |             | Corrigido coluna node
 # | 23/05/2018 | Giovani     |             |             | Alterado ID de edges da classe alert.
+# | 10/06/2026 | Bernardo    |             | 38953       | Adicionado colunas idwfatividadeinicialtransferir e idwfprocessoeventotransferir.
 
 
 connect $v{ds_bridge};
@@ -24,6 +25,8 @@ if "$v{_action#}".equals("list") ;
 		ar.dataalteracao,
 		ar.tiposituacao,
 		ar.idwfatividadeproxima,
+		ar.idwfatividadeinicialtransferir,
+		ar.idwfprocessoeventotransferir,
 		ar.idusuarioalteracao,
 		ar.descricao,
 		a.idwfatividade,
@@ -175,12 +178,14 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
 	set msg1 = "Atividade gravada com sucesso.";
 	set msg2 = "Erro ao gravar Atividade.";
-	set response = new bdo.util.SQLUtilX('wfatividaderealizada', 'descricao, idwfprocesso, idwfatividade, idwfatividadeproxima, tiposituacao, idareaempresa, idwfcausa, idwfimpacto, dataalteracao, idusuarioalteracao', 'idwfatividaderealizada')
+	set response = new bdo.util.SQLUtilX('wfatividaderealizada', 'descricao, idwfprocesso, idwfatividade, idwfatividadeproxima, idwfatividadeinicialtransferir, idwfprocessoeventotransferir, tiposituacao, idareaempresa, idwfcausa, idwfimpacto, dataalteracao, idusuarioalteracao', 'idwfatividaderealizada')
 								   	.setConnectionX(execScript.getConnection())
 								   	.setString('$v{descricao}')
 								   	.setInt('$v{idwfprocesso}')
 								   	.setInt('$v{idwfatividade}')
 								   	.setInt('$v{idwfatividadeproxima#}')
+								   	.setInt('$v{idwfatividadeinicialtransferir#}')
+								   	.setInt('$v{idwfprocessoeventotransferir#}')
 								   	.setString('$v{tiposituacao#S}')
 								   	.setInt('$v{idareaempresa#}')
 								   	.setInt('$v{idwfcausa#}')

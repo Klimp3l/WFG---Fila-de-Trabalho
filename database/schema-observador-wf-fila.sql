@@ -134,6 +134,8 @@ CREATE TABLE WFAtividadeRealizada (
                 dataAlteracao DATE NOT NULL,
                 tipoSituacao CHAR(1) NOT NULL,
                 idWFAtividadeProxima INTEGER,
+                idWFAtividadeInicialTransferir INTEGER,
+                idWFProcessoEventoTransferir INTEGER,
                 idWFImpacto INTEGER,
                 idWFCausa INTEGER,
                 idAreaEmpresa INTEGER,
@@ -149,6 +151,10 @@ COMMENT ON COLUMN WFAtividadeRealizada.tipoSituacao IS 'F-Finalizada, S-Sequenci
 COMMENT ON COLUMN WFAtividadeRealizada.idWFAtividadeProxima IS 'Identifica a próxima atividade para gerar nova fila. ';;
 
 ALTER SEQUENCE seq_idwfatividaderealizada OWNED BY WFAtividadeRealizada.idWFAtividadeRealizada;;
+
+ALTER TABLE WFAtividadeRealizada ADD CONSTRAINT wfatividadeinicialtransferir_wfatividaderealizada_fk
+FOREIGN KEY (idWFAtividadeInicialTransferir)
+REFERENCES WFAtividade (idWFAtividade);;
 
 CREATE SEQUENCE seq_idwfprocessoevento;;
 
@@ -172,6 +178,10 @@ COMMENT ON COLUMN WFProcessoEvento.tempoExpiracao IS 'dataInclusão + horaInclus
 COMMENT ON COLUMN WFProcessoEvento.tipoTempoExpiracao IS 'MINUTO,HORA,DIA,SEMANA,MES';;
 
 ALTER SEQUENCE seq_idwfprocessoevento OWNED BY WFProcessoEvento.idWFProcessoEvento;;
+
+ALTER TABLE WFAtividadeRealizada ADD CONSTRAINT wfprocessoevento_wfatividaderealizada_fk
+FOREIGN KEY (idWFProcessoEventoTransferir)
+REFERENCES WFProcessoEvento (idWFProcessoEvento);;
 
 CREATE SEQUENCE seq_wffilatrabalho;;
 

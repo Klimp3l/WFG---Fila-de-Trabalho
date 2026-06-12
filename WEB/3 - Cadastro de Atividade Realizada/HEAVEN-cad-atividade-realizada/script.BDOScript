@@ -14,6 +14,9 @@ parameter idwfprocesso label="Processo" type="integer" values="sql_var(sqlwfproc
 sql select 'F' tiposituacao, 'Finalizado' descrtiposituacao union select 'S', 'Sequencia' sql_var(sql_tiposituacao);
 sql select idwfatividade||'' idwfatividade, descricao from wfatividade where idwfprocesso = $v{idwfprocesso}  Union Select '', '' order by 2 sql_var(sql_wfatividade);
 sql select idwfatividade||'' idwfatividadeproxima, descricao from wfatividade where idwfprocesso = $v{idwfprocesso} Union Select '', ''  order by 2 sql_var(sql_wfatividadeproxima);
+sql select pe.idwfprocessoevento||'' idwfprocessoeventotransferir, p.descricao||' - '||pe.descricao descricao from wfprocessoevento pe inner join wfprocesso p on p.idwfprocesso = pe.idwfprocesso where pe.situacao = 'A' Union Select '', '' order by 2 sql_var(sql_wfprocessoeventotransferir);
+sql select '' idwfatividadeinicialtransferir, '' descricao sql_var(sql_wfatividadeinicialtransferir);
+sql select pe.idwfprocessoevento||'' idwfprocessoeventotransferir, a.idwfatividade||'' idwfatividadeinicialtransferir, a.descricao from wfprocessoevento pe inner join wfatividade a on a.idwfprocesso = pe.idwfprocesso where pe.situacao = 'A' and a.situacao = 'A' order by 1, 3 sql_var(sql_wfatividadeinicialtransferir_porevento);
 sql select idwfcausa||'' idwfcausa, descricao from wfcausa where situacao = 'A'  Union Select '', '' order by 2 sql_var(sql_wfcausa);
 sql select idwfimpacto||'' idwfimpacto, descricao from wfimpacto where situacao = 'A'  Union Select '', '' order by 2 sql_var(sql_wfimpacto);
 sql select idareaempresa||'' idareaempresa, descricao from areaempresa  Union Select '', '' order by 2 sql_var(sql_areaempresa);

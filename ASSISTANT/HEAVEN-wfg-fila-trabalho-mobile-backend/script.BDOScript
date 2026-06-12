@@ -8,6 +8,8 @@
 	~write_exec_log;
 	set run = ''+execScript.getTarefaExecucao().setObs('getAtividades -  $v{usuario}');
 
+	set idUsuario = "$v{idUsuario}".equals("700007") ? 6 : $v{idUsuario};
+
 	#######################
 	# Busca os Parâmetros #
 	#######################
@@ -131,6 +133,9 @@
 
 				
 				/* Vem da geração de fila trabalho */
+				'datavalidade', (wb.valores->>'datavalidade')::varchar,
+				'qtdproduzido', wb.valores->>'qtdproduzido',
+				'qtdestoquecorreta', wb.valores->>'qtdestoquecorreta',
 				'datavencimento', (wb.valores->>'datavencimento')::varchar,
 				'dataprevisaosaida', (wb.valores->>'dataprevisaosaida')::varchar,
 				'classificacao', wb.valores->>'classificacao',
@@ -160,174 +165,74 @@
 				ar.idwfatividade = wb.idwfatividade
 		), '[]') as atividadeselegiveis
 		/* Columns */
-		,json_build_object(
-			'produto', json_build_object(
+		,json_build_array(
+			json_build_object(
 				'label', 'Produto',
-				'type', 'input',
-				'searchable', true,
-				'sortable', true,
-				'defaultVisible', true
+				'icon', 'fa-solid fa-tags',
+				'itens', json_build_array(
+					json_build_object('key', 'produto', 'label', 'Produto', 'type', 'input', 'searchable', true, 'sortable', true, 'defaultVisible', true),
+					json_build_object('key', 'idproduto', 'label', 'ID Produto', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-genderless', 'defaultVisible', true),
+					json_build_object('key', 'codigobarras', 'label', 'Código barras', 'type', 'input', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-barcode', 'defaultVisible', true),
+					json_build_object('key', 'classe', 'label', 'Classe', 'type', 'multipleSelect', 'options', ARRAY['A', 'B', 'C'], 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-layer-group'),
+					json_build_object('key', 'fornecedor', 'label', 'Fornecedor', 'type', 'input', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-truck-fast')
+				)
 			),
-			'idproduto', json_build_object(
-				'label', 'ID Produto',
-				'type', 'inputNumber',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-genderless',
-				'defaultVisible', true
+			json_build_object(
+				'label', 'Mercadológicos',
+				'icon', 'fa-solid fa-layer-group',
+				'itens', json_build_array(
+					json_build_object('key', 'departamento', 'label', 'Departamento', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building'),
+					json_build_object('key', 'setor', 'label', 'Setor', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building'),
+					json_build_object('key', 'grupo', 'label', 'Grupo', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building'),
+					json_build_object('key', 'familia', 'label', 'Família', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building')
+				)
 			),
-			'codigobarras', json_build_object(
-				'label', 'Código barras',
-				'type', 'input',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-barcode',
-				'defaultVisible', true
+			json_build_object(
+				'label', 'Datas',
+				'icon', 'fa-solid fa-calendar-days',
+				'itens', json_build_array(
+					json_build_object('key', 'diassemvenda', 'label', 'Dias sem venda', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
+					json_build_object('key', 'diasentrada', 'label', 'Dias entrada', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
+					json_build_object('key', 'dataultimavenda', 'label', 'Data última venda', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
+					json_build_object('key', 'dataultimaentrada', 'label', 'Data última entrada', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-day'),
+					json_build_object('key', 'datavalidade', 'label', 'Data validade', 'type', 'input', 'inputType', 'date', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark')
+				)
 			),
-			'classe', json_build_object(
-				'label', 'Classe',
-				'type', 'multipleSelect',
-				'options', ARRAY['A', 'B', 'C'],
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-layer-group'
-			),
-			'fornecedor', json_build_object(
-				'label', 'Fornecedor',
-				'type', 'input',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-truck-fast'
-			),
-			'qtdestoqueatual', json_build_object(
-				'label', 'Estoque atual',
-				'type', 'inputNumber',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-boxes-stacked',
-				'defaultVisible', true
-			),
-			'estoquequantidade', json_build_object(
-				'label', 'Estoque quantidade',
-				'type', 'inputNumber',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-boxes-stacked'
-			),
-			'diassemvenda', json_build_object(
-				'label', 'Dias sem venda',
-				'type', 'inputNumber',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-calendar-days'
-			),
-			'diasentrada', json_build_object(
-				'label', 'Dias entrada',
-				'type', 'inputNumber',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-calendar-days'
-			),
-			'dataultimavenda', json_build_object(
-				'label', 'Data última venda',
-				'type', 'date',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-calendar-days'
-			),
-			'dataultimaentrada', json_build_object(
-				'label', 'Data última entrada',
-				'type', 'date',
-				'searchable', true,
-				'sortable', true,
-				'icon', 'fa-solid fa-calendar-day'
-			),
-			'valorprecovenda', json_build_object(
-				'label', 'Valor preço venda',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
+			json_build_object(
+				'label', 'Valores',
 				'icon', 'fa-solid fa-money-bill-wave',
-				'defaultVisible', true
+				'itens', json_build_array(
+					json_build_object('key', 'valorprecovenda', 'label', 'Valor preço venda', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-money-bill-wave', 'defaultVisible', true),
+					json_build_object('key', 'valorcustoaquisicao', 'label', 'Valor custo aquisição', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-hand-holding-dollar')
+				)
 			),
-			'qtdultimaentrada', json_build_object(
-				'label', 'Quantidade última entrada',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-dolly'
+			json_build_object(
+				'label', 'Quantidade',
+				'icon', 'fa-solid fa-scale-balanced',
+				'itens', json_build_array(
+					json_build_object('key', 'qtdultimaentrada', 'label', 'Quantidade última entrada', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dolly'),
+					json_build_object('key', 'qtdeultimavenda', 'label', 'Quantidade última venda', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dollar-sign'),
+					json_build_object('key', 'qtdvendamedia', 'label', 'Quantidade venda média', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-cart-shopping'),
+					json_build_object('key', 'qtdproducaobandeja', 'label', 'Quantidade produção bandeja', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set'),
+					json_build_object('key', 'capacidade', 'label', 'Capacidade', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-cubes'),
+					json_build_object('key', 'qtdunentrada', 'label', 'Quantidade unidade entrada', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dolly'),
+					json_build_object('key', 'qtdproduzido', 'label', 'Quantidade produzido', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set')
+				)
 			),
-			'qtdeultimavenda', json_build_object(
-				'label', 'Quantidade última venda',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-dollar-sign'
-			),
-			'valorcustoaquisicao', json_build_object(
-				'label', 'Valor custo aquisição',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-hand-holding-dollar'
-			),
-			'qtdvendamedia', json_build_object(
-				'label', 'Quantidade venda média',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-cart-shopping'
-			),
-			'qtdproducaobandeja', json_build_object(
-				'label', 'Qtde produção bandeja',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-kitchen-set'
-			),
-			'percentualabastecimento', json_build_object(
-				'label', 'Percentual abastecimento',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-percent'
-			),
-			'capacidade', json_build_object(
-				'label', 'Capacidade',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-cubes'
-			),
-			'qtdeabastecer', json_build_object(
-				'label', 'Qtde abastecer',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-box-open'
-			),
-			'qtdultinventario', json_build_object(
-				'label', 'Qtde último inventário',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-boxes-packing'
-			),
-			'qtdestoqueatualcd', json_build_object(
-				'label', 'Estoque atual CD',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-warehouse'
-			),
-			'qtdunentrada', json_build_object(
-				'label', 'Quantidade unidade entrada',
-				'type', 'inputNumber',
-				'searchable', false,
-				'sortable', true,
-				'icon', 'fa-solid fa-dolly'
+			json_build_object(
+				'label', 'Estoque',
+				'icon', 'fa-solid fa-boxes-stacked',
+				'itens', json_build_array(
+					json_build_object('key', 'qtdestoqueatual', 'label', 'Estoque atual', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked', 'defaultVisible', true),
+					json_build_object('key', 'estoquequantidade', 'label', 'Estoque quantidade', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked'),
+					json_build_object('key', 'percentualabastecimento', 'label', 'Percentual abastecimento', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-percent'),
+					json_build_object('key', 'qtdeabastecer', 'label', 'Quantidade abastecer', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-box-open'),
+					json_build_object('key', 'qtdultinventario', 'label', 'Quantidade último inventário', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-boxes-packing'),
+					json_build_object('key', 'qtdestoqueatualcd', 'label', 'Estoque atual CD', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-warehouse'),
+					json_build_object('key', 'qtdestoquecorreta', 'label', 'Quantidade estoque correto', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked')
+				)
 			)
-		) as columns
+		) as groupcolumns
 	from
 		wbase wb
 		inner join produto p on p.idproduto = wb.idproduto
@@ -417,6 +322,16 @@
 					idWFFilatrabalhoFinalizacao.append(obj.idwffilatrabalho).append(',');
 				}
 
+				if (obj?.qtdproduzido) {
+					obj.observacao = obj.observacao + " | Quantidade produzido: " + obj.qtdproduzido;
+				}
+				if (obj?.qtdestoquecorreta) {
+					obj.observacao = obj.observacao + " | Quantidade estoque correto: " + obj.qtdestoquecorreta;
+				}
+				if (obj?.datavalidade) {
+					obj.observacao = obj.observacao + " | Data validade: " + obj.datavalidade;
+				}
+
 				sqlUtilX.setIndex(-1).setIndexPK(-1)
 					.setInt(obj.idwfatividadeencaminhamento)
 					.setString(obj.observacao)
@@ -449,7 +364,7 @@
 	# Gera fila trabalho
 	$include{
 		script:HEAVEN-wfg-gera-wffilatrabalho-sequencia-include, 
-		"HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico"
+		"'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'"
 	}include
 
 	<!--output-->

@@ -68,6 +68,10 @@ const vueDef = {
 							$> sb.append(scriptAtividadeRealizadaFinalizacaoFilters());
 						]
 					},
+					{
+						nome: "Transfere Ocorrência de Processo",
+						apelido: "HEAVEN-wfg-transfere-ocorrencia-processo"
+					},
 				]
 			};
 		},

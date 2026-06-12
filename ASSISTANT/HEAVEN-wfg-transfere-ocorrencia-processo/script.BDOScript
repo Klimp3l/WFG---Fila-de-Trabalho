@@ -1,0 +1,231 @@
+# versao 1.0
+#
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição
+# | 10/06/2026 | Codex       | IANDev      |             | Criação do ETL de transferência de ocorrência.
+
+~write_exec_log;
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+sql
+Select
+	'$v{WFFilaTrabalho_idWFOcorrencia#}' as "WFFilaTrabalho_idWFOcorrencia"
+	,'$v{WFFilaTrabalho_idWFFilatrabalho#}' as "WFFilaTrabalho_idWFFilatrabalho"
+	,'$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}' as "WFFilaTrabalho_idTarefaExecAtvRealizada"
+	,'$v{WFOcorrencia_apelidoTarefaEncaminhamento#HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico}' as "WFOcorrencia_apelidoTarefaEncaminhamento"
+save_rows(1,1);
+
+# Filtros opcionais
+set filtro_WFFilaTrabalho_idTarefaExecAtvRealizada = '$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}'.equals('') ? '' : ' and ft.idTarefaExecucaoAtividadeRealizada in ($v{WFFilaTrabalho_idTarefaExecAtvRealizada}) ';
+set filtro_WFFilaTrabalho_idWFFilatrabalho = '$v{WFFilaTrabalho_idWFFilatrabalho#}'.equals('') ? '' : ' and ft.idwffilatrabalho in ($v{WFFilaTrabalho_idWFFilatrabalho}) ';
+set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.equals('') ? '' : ' and o.idwfocorrencia in ($v{WFFilaTrabalho_idWFOcorrencia}) ';
+
+begin_transaction;
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
+	sql_exec
+	With
+		candidatas as (
+			Select
+				o.idwfocorrencia as idwfocorrenciaorigem
+				,ft.idwffilatrabalho as idwffilatrabalhoorigem
+				,o.idempresa
+				,(o.chaves->>'idproduto')::bigint as idproduto
+				,o.chaves
+				,o.valores
+				,ar.idwfprocessoeventotransferir
+				,coalesce(ar.idwfatividadeinicialtransferir, peDestino.idwfatividadeinicial) as idwfatividadeinicialdestino
+				,ar.idwfimpacto
+				,ar.idareaempresa
+				,ar.idwfcausa
+				,row_number() over (
+					partition by o.idwfocorrencia
+					order by ft.idwffilatrabalho desc
+				) as rkOcorrencia
+			From
+				wfocorrencia o
+				inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+				inner join wfatividaderealizada ar on (ar.idwfatividaderealizada = ft.idwfatividaderealizada)
+				inner join wfprocessoevento peDestino on (peDestino.idwfprocessoevento = ar.idwfprocessoeventotransferir and peDestino.situacao = 'A')
+			Where
+				o.idwffilatrabalhofinalizacao is null
+				and o.expirada = 'N'
+				and ar.idwfprocessoeventotransferir is not null
+				and coalesce(o.chaves->>'idproduto', '') <> ''
+				and coalesce(ar.idwfatividadeinicialtransferir, peDestino.idwfatividadeinicial) is not null
+				$v{filtro_WFFilaTrabalho_idTarefaExecAtvRealizada}
+				$v{filtro_WFFilaTrabalho_idWFFilatrabalho}
+				$v{filtro_WFFilaTrabalho_idWFOcorrencia}
+		),
+		elegiveis as (
+			Select
+				*
+			From
+				candidatas
+			Where
+				rkOcorrencia = 1
+		),
+		candidatasDestino as (
+			Select
+				*
+				,row_number() over (
+					partition by idempresa, idproduto, idwfprocessoeventotransferir
+					order by idwffilatrabalhoorigem desc
+				) as rkDestino
+			From
+				elegiveis
+		),
+		semDuplicidade as (
+			Select
+				cd.*
+			From
+				candidatasDestino cd
+			Where
+				cd.rkDestino = 1
+				and not exists (
+					Select
+						null
+					From
+						wfocorrencia od
+					Where
+						od.expirada = 'N'
+						and od.idwffilatrabalhofinalizacao is null
+						and od.idempresa = cd.idempresa
+						and (od.chaves->>'idproduto')::bigint = cd.idproduto
+						and od.idwfprocessoevento = cd.idwfprocessoeventotransferir
+				)
+		),
+		novasOcorrencias as (
+			Insert into WFOcorrencia
+				(idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao)
+			Select
+				sd.idwfprocessoeventotransferir
+				,sd.idempresa
+				,sd.chaves
+				,'A' as tipoencaminhamento
+				,'$v{WFOcorrencia_apelidoTarefaEncaminhamento#HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico}' as apelidotarefaencaminhamento
+				,sd.valores
+				,'A' as tipoinclusao
+				,'$v{dataAtual}'::date as datainclusao
+				,'$v{dataAtual"datetime:HH:mm:ss"}'::text as horainclusao
+				,$v{idUsuario} as idusuarioinclusao
+				,$v{execId} as idtarefaexecucaoinclusao
+			From
+				semDuplicidade sd
+			Returning
+				idwfocorrencia
+				,idwfprocessoevento
+				,idempresa
+				,chaves
+		),
+		mapaNovasOcorrencias as (
+			Select
+				no.idwfocorrencia as idwfocorrenciadestino
+				,sd.idwffilatrabalhoorigem
+				,sd.idwfatividadeinicialdestino
+				,sd.idwfimpacto
+				,sd.idareaempresa
+				,sd.idwfcausa
+			From
+				novasOcorrencias no
+				inner join semDuplicidade sd on (
+					sd.idempresa = no.idempresa
+					and sd.idwfprocessoeventotransferir = no.idwfprocessoevento
+					and sd.chaves = no.chaves
+				)
+		)
+		/*
+		novasFilas as (
+		*/
+	Insert into WFFilaTrabalho
+		(idwfocorrencia, idempresa, idwfatividade, idwffilatrabalhoanterior, idwfimpacto, idareaempresa, datainclusao, horainclusao, idtarefaexecucaoinclusao, dataexpiracao, horaexpiracao)
+	Select
+		mno.idwfocorrenciadestino
+		,o.idempresa
+		,mno.idwfatividadeinicialdestino
+		,mno.idwffilatrabalhoorigem
+		,mno.idwfimpacto
+		,mno.idareaempresa
+		,'$v{dataAtual}'::date as datainclusao
+		,'$v{dataAtual"datetime:HH:mm:ss"}'::text as horainclusao
+		,$v{execId} as idtarefaexecucaoinclusao
+		,now() + (
+			Case a.tipotempoexpiracao
+				when 'MINUTO' then a.tempoexpiracao * interval '1 minute'
+				when 'HORA' then a.tempoexpiracao * interval '1 hour'
+				when 'DIA' then a.tempoexpiracao * interval '1 day'
+				when 'SEMANA' then a.tempoexpiracao * interval '1 week'
+				when 'MES' then a.tempoexpiracao * interval '1 month'
+				else null
+			end
+		)::date as dataexpiracao
+		,now() + (
+			Case a.tipotempoexpiracao
+				when 'MINUTO' then a.tempoexpiracao * interval '1 minute'
+				when 'HORA' then a.tempoexpiracao * interval '1 hour'
+				when 'DIA' then a.tempoexpiracao * interval '1 day'
+				when 'SEMANA' then a.tempoexpiracao * interval '1 week'
+				when 'MES' then a.tempoexpiracao * interval '1 month'
+				else null
+			end
+		)::time as horaexpiracao
+	From
+		mapaNovasOcorrencias mno
+		inner join wfocorrencia o on (o.idwfocorrencia = mno.idwfocorrenciadestino)
+		inner join wfatividade a on (a.idwfatividade = mno.idwfatividadeinicialdestino)
+	Where
+		not exists (
+			Select
+				null
+			From
+				wffilatrabalho ft
+			Where
+				ft.idwfocorrencia = mno.idwfocorrenciadestino
+		)
+	/*
+#			Returning
+#				idwffilatrabalho
+#				,idwfocorrencia
+#		),
+#		insereCausa as (
+#			Insert into WFFilaTrabalhoCausa
+#				(idwffilatrabalho, idwfcausa, descricao)
+#			Select
+#				nf.idwffilatrabalho
+#				,mno.idwfcausa
+#				,'Causa atribuída automaticamente pela tarefa $v{apelido}, execução $v{execId}.' as descricao
+#			From
+#				novasFilas nf
+#				inner join mapaNovasOcorrencias mno on (mno.idwfocorrenciadestino = nf.idwfocorrencia)
+#			Where
+#				mno.idwfcausa is not null
+#		)
+#	Update WFOcorrencia o
+#	Set idwffilatrabalhofinalizacao = e.idwffilatrabalhoorigem
+#	From elegiveis e
+#	Where
+#		o.idwfocorrencia = e.idwfocorrenciaorigem
+#		and o.idwffilatrabalhofinalizacao is null
+	*/
+	;
+
+commit;
+
+run_script_java_groovy atribuirResponsavel;
+<script_java_groovy name="atribuirResponsavel">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+
+	String apelidoAtribuicao = execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento');
+	if (apelidoAtribuicao == null || apelidoAtribuicao.trim().isEmpty()) {
+		apelidoAtribuicao = "HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico";
+	}
+
+	ExecScript execScriptChild = new ExecTarefa(apelidoAtribuicao, execScript).getExecScriptChild();
+	execScriptChild.addVar('WFOcorrencia_idTarefaExecucaoInclusao', execScript.getValueVar('execId'));
+	execScriptChild.run();
+</script_java_groovy>
