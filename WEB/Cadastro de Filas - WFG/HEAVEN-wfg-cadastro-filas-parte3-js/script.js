@@ -273,6 +273,24 @@ const store = new Vue({
 		label: "Estoque",
 		items: [
 			{
+				key: "estoqueZero",
+				label: "Estoque Zero",
+				type: "checkbox",
+				placeholder: "Estoque Zero",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
+				key: "estoqueNegativo",
+				label: "Estoque Negativo",
+				type: "checkbox",
+				placeholder: "Estoque Negativo",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
 				key: "estoquePositivo",
 				label: "Estoque Positivo",
 				type: "checkbox",

@@ -18,6 +18,8 @@ Select
 	,'$v{WFProcessoEvento_idWFProcessoEvento#}' as "WFProcessoEvento_idWFProcessoEvento"
 	,'$v{idWFAtividadeRealizadaFinalizacao#}' as "idWFAtividadeRealizadaFinalizacao"
 	,'$v{vendaDiaAnterior#0}' as "vendaDiaAnterior"
+	,'$v{estoqueZero#false}' as "estoqueZero"
+	,'$v{estoqueNegativo#false}' as "estoqueNegativo"
 	,'$v{estoquePositivo#false}' as "estoquePositivo"
 	,'$v{estoquePositivoPontoExposicao#false}' as "estoquePositivoPontoExposicao"
 	,'$v{pontoExposicao#}' as "pontoExposicao"
@@ -36,7 +38,17 @@ set filtroVendaDiaAnterior = '$v{vendaDiaAnterior#false}'.equals("false") ? "" :
 
 ###########
 # Estoque #
-set filtroEstoquePositivo = '$v{estoquePositivo#false}'.equals("false") ? "" : "and sum(esa.quantidade) > 0.";
+set filtroEstoqueZero = '$v{estoqueZero#false}'.equals("false") ? "" : "or sum(esa.quantidade) = 0.";
+set filtroEstoqueNegativo = '$v{estoqueNegativo#false}'.equals("false") ? "" : "or sum(esa.quantidade) < 0.";
+set filtroEstoquePositivo = '$v{estoquePositivo#false}'.equals("false") ? "" : "or sum(esa.quantidade) > 0.";
+set filtroGeralEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
+	and (
+		1=0
+		$v{filtroEstoqueZero}
+		$v{filtroEstoqueNegativo}
+		$v{filtroEstoquePositivo}
+	)
+""" : "";
 
 ######################
 # Ponto de Exposição #
@@ -45,7 +57,7 @@ set filtroPontoExposicao = '$v{pontoExposicao#}'.equals("") ? "" : "and ppe.idpo
 
 #########
 # Joins #
-set joinFiltroEstoque = !"$v{filtroEstoquePositivo}".equals("") ? """
+set joinFiltroEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
 	inner join estoquesaldoatual esa on (esa.idempresa = x.idempresa and esa.idproduto = p.idproduto)
 	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
 """ : "";
@@ -116,7 +128,7 @@ begin_transaction;
 				1=1
 
 				/* Filtros de Estoque */
-				$v{filtroEstoquePositivo}
+				$v{filtroGeralEstoque}
 
 				/* Filtros de Estoque Ponto de Exposição */
 				$v{filtroEstoquePositivoPontoExposicao}
