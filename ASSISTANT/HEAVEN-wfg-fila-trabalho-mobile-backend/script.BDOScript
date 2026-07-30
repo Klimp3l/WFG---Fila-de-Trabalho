@@ -68,6 +68,14 @@
 				'empresa', wb.empresa,
 				'idproduto', p.idproduto,
 				'codigobarras', p.codigobarras,
+				'ean', coalesce((
+					select json_agg(json_build_object(
+						'ean', pe.codigobarras,
+						'quantidade', pe.quantidade
+					))
+					from produtoembalagem pe
+					where pe.idproduto = p.idproduto
+				), '[]'::json),
 				'produto', p.descricao,
 				'imagem', p.foto,
 				'idwfatividaderealizada', wb.idwfatividaderealizada,

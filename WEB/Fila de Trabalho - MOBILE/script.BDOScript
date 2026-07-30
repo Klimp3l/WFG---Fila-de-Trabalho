@@ -1,0 +1,445 @@
+# versao 3.1
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 15/12/2021 | Douglas     |             | 25508  	 | Alterado SQLs criando a variável filtroUsuario para não mais utilizar OR no WHERE
+# | 15/01/2022 | Elcio       | Marino      | 25886		 | Apresentando agora o id da empresa a direita do nome da atividade. Isso ajudará nas investigações futuras. 
+# | 01/08/2022 | André		 | Violeta	   | 27940		 | Alterado as importações HTTP para HTTPS.
+# | 12/08/2022 | Douglas	 | Élcio	   | 		     | Retirado a gravação de dados na tabela giovani_log_wfocorrencia_valores
+# | 11/08/2024 | Douglas	 | 	           | 32664	     | Ajustes nos sqls sql_idwfatividade e sql_filadetrabalho para melhorar a performance
+# | 13/08/2024 | Douglas	 | 	           | 32664	     | Criado script_contents para conteúdo do body e head pois em alguns casos estava ocorrendo o erro "Method code too large"
+# | 24/05/2024 | Douglas	 | Eudione     | 33262	     | Retirado teste/bloqueio se a tarefa já estiver em execução. Incluído detalhes da execução na observação das tarefas executadas. 
+# | 02/12/2024 | Bernardo	 | Eudione     | 33287	     | Adcionado ddescrição da opção selecionada.
+# | 13/05/2024 | Vinicius	 | Eudione     | 33269	     | ajustado para trazer 100 itens ao abrir a tela. / ajustado para poder ajustar a quantidade de itens na tela para 100, 200, 300, 600, 1000, 2000.
+# | 17/06/2026 | Bernardo	 | Anderson    | 39024	     | Fixado cabeçalho da table no html.
+# | 18/06/2026 | Bernardo	 | Anderson    | 39029	     | Exportação de excel ajustada para considerar a visualização das colunas.
+
+~write_exec_log;
+
+#if $v{idUsuario} == 2;
+#	set idUsuario = 6;
+#end_if;
+
+$include{HEAVEN-script-sql-busca-config-tarefa, "'$v{apelido}'"}include
+
+# Impede que a tarefa seja rodada 2 vezes simultaneamente. 
+$include{HEAVEN-script-sql-verifica-execucao-tarefa-mesmo-usuario}include
+
+
+connect $v{datasource2};
+
+$include{HEAVEN-if-odw3-set-odw1}include
+
+set _iframe = true;
+
+connect $v{ds_bridge};
+
+set filtroProcesso = "$c{CLIENTE-cfg-id-ignora-processo#}".equals('') ? '' : "and NOT p.idwfprocesso in ($c{CLIENTE-cfg-id-ignora-processo#})";
+set filtroAtividade = "$c{CLIENTE-cfg-id-ignora-atividade#}".equals('') ? '' : "and NOT a.idwfatividade in ($c{CLIENTE-cfg-id-ignora-atividade#})";
+
+set filtroUsuario = ($v{idUsuario} == 700007 ? " f.idusuarioresponsavel = 6 " : "f.idusuarioresponsavel = $v{idUsuario}");
+
+sql  
+Select /* $v{apelido} | Sql1:  $v{execId}  */
+	e.idempresa||'.'||a.idwfatividade idwfatividade,
+	'Processo: '||trim(p.descricao)||' - '||cast(p.idwfprocesso as varchar(100))||' | Loja: '||e.apelido||' | Atividade: '||trim(a.descricao)||' - '||cast(a.idwfatividade as varchar(100)) as descricao
+from
+	wfatividade a
+	inner join wfprocesso p on p.idwfprocesso = a.idwfprocesso
+	cross join empresa e
+where 
+	1=1
+	$v{filtroProcesso} 
+	$v{filtroAtividade}
+/*	
+	Marcado condição em call com Anderson 29/04/2026. - Elcio. 
+	and a.idwfatividade NOT in (
+		19,	/* #! Verificação Comercial */
+		23,	/* #! Arrumar Precificação */
+		24,	/* #! Efetuar Revisão de Mix */
+		28  /* #! Realizar Produção do item */
+	)
+*/	
+	and exists (
+		select 	null
+		from 	wffilatrabalho f 
+				inner join wfocorrencia o on o.idwfocorrencia = f.idwfocorrencia
+		where 	$v{filtroUsuario}
+				and f.idempresa = e.idempresa
+				and f.idwfatividade = a.idwfatividade
+				and f.expirada = 'N'
+				and f.idwfatividaderealizada is null 
+				and o.expirada = 'N'
+				and o.idwffilatrabalhofinalizacao is null
+				and o.apelidotarefaencaminhamento = 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
+	) 
+order by 2
+sql_var(sql_idwfatividade);
+
+stop_if $c{idwfatividade:count} == 0;
+
+<html_head>
+	<style>
+		.container1 {
+			width: 500px;
+		}
+	</style>
+</html_head>
+
+parameter idwfatividade label="Atividade" type="text" values="sql_var(sql_idwfatividade)";
+
+stop_if '$v{idwfatividade#}'.equals('');
+
+set run = ""+execScript.getTarefaExecucao().setObs('$v{usuario} - execTarefa - $v{idwfatividade}');
+
+set idempresa = '$v{idwfatividade}'.split('[.]')[0];
+set idwfatividade = '$v{idwfatividade}'.split('[.]')[1];
+
+#sql select * from wfatividade where idwfatividade = $v{idwfatividade} sql_var(sql_wfatividade);
+
+sql 
+Select x.descricao as opcaoselecionada
+From ($v{sql_idwfatividade}) x
+Where x.idwfatividade = '$v{idempresa}.$v{idwfatividade}'
+;
+
+sql 
+Select  /* $v{apelido} | Sql2: $v{execId}  */
+	a.idwfatividade
+	,a.descricao||' E:'||cast(coalesce($v{idempresa},0) as varchar(100)) as descricao, a.situacao, a.idwfprocesso, a.dataalteracao, a.idusuarioalteracao, a.prioridade, a.tempoexpiracao, a.tipotempoexpiracao, a.idwfatividaderealizadaexpiracao, a.ignoraempresawfatividadecolaborador
+From 
+	wfatividade a
+Where 
+	a.idwfatividade = $v{idwfatividade} 
+sql_var(sql_wfatividade);
+
+
+sql select (case when $v{idwfatividade} in (28, 29, 30, 31, 32, 33, 34, 35) then 1 else 0 end) as bool;
+set filtroData = '$c{bool#0}'.equals('0') ? "" : " and o.datainclusao <> '2020-09-16' ";
+set filtroUsuario = ($v{idUsuario} == 700007 ? "ft.idusuarioresponsavel = 6" : "ft.idusuarioresponsavel = $v{idUsuario}");
+
+sql 
+Select /* $v{apelido} | Sql3:  $v{execId}  */
+	x.*
+	,coalesce((x.qtdestoqueatual * x.valorcustoaquisicao), 0.) as valestoqueparado
+	,row_number() over() -1 as index
+From (
+	Select
+		cast(ft.idwffilatrabalho as varchar(255)) as recid
+		,ft.idwffilatrabalho
+		,o.idwfocorrencia
+		,to_char(ft.datainclusao ,'dd/mm/yyyy') as datainclusao
+		,ft.horainclusao
+		,ft.idwfatividaderealizada
+		,coalesce(ft.observacao,'') as observacao
+		,coalesce(ft.observacao,'') as observacao2
+		,p.codigobarras
+		,p.idproduto
+		,p.descricao as produto
+		,f.idfamilia
+		,f.descricao as familia
+		,g.idgrupo
+		,g.descricao as grupo
+		,s.idsetor
+		,s.descricao as setor
+		,d.iddepartamento
+		,d.descricao as departamento
+		,ppc.valorprecovenda
+		,current_date - pr.dataultimavenda as diassemvenda
+		,current_date - pr.dataultimaentrada as diasentrada
+		,pr.qtdeultimaentrada as qtdultimaentrada
+		,ppc.valorcustoaquisicao
+		,coalesce((Select sum(esa.quantidade) From 	estoquesaldoatual esa Where esa.idproduto = p.idproduto and esa.idempresa = o.idempresa), 0.) as qtdestoqueatual
+		,(o.valores->>'qtdultinventario') as qtdultinventario
+		,CEIL((o.valores->>'qtdproducaobandeja')::numeric) as qtdproducaobandeja
+		,(	Select	jsonb_agg(jsonb_build_object(
+						'ean', ean.codigobarras,
+						'quantidade', ean.quantidade
+					)) as embalagem
+			From	produtoembalagem ean
+			Where	ean.idproduto = p.idproduto
+		) as ean
+	From
+		wffilatrabalho ft
+		inner join wfocorrencia o on (o.idwfocorrencia = ft.idwfocorrencia)
+		inner join produto p on (p.idproduto = (o.chaves->>'idproduto')::bigint)
+		left join produtoprecocusto ppc on (ppc.idproduto = p.idproduto and ppc.idempresa = o.idempresa)
+		left join produtoresumo pr on (pr.idproduto = p.idproduto and pr.idempresa = o.idempresa)
+		left join familia f on (f.idfamilia = p.idfamilia)
+		left join grupo g on (g.idgrupo = p.idgrupo)
+		left join setor s on (s.idsetor = p.idsetor)
+		left join departamento d on (d.iddepartamento = p.iddepartamento)
+	Where
+		$v{filtroUsuario}
+		and ft.idempresa = $v{idempresa}
+		and ft.idwfatividade = $v{idwfatividade}
+		and ft.expirada = 'N'
+		and ft.idwfatividaderealizada is null
+		and o.idwffilatrabalhofinalizacao is null
+		and o.expirada = 'N'
+		and o.apelidotarefaencaminhamento = 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'
+		$v{filtroData}
+	) x
+-- Limit 100	
+sql_var(sql_filadetrabalho);
+
+
+sql select
+	ar.idwfatividaderealizada as "id",
+	ar.descricao||coalesce(' -> '||a.descricao, '') as "text",
+	ar.idwfatividaderealizada as idwfatividaderealizada,
+	ar.descricao||coalesce(' -> '||a.descricao, '') as atividaderealizada
+from
+	wfatividaderealizada ar
+	left join wfatividade a on (a.idwfatividade = ar.idwfatividadeproxima)
+where
+	ar.idwfatividade = $v{idwfatividade}
+Order by 2 
+sql_var(sql_idwfatividaderealizada);
+
+
+set iddepartamento = '$c{iddepartamento:list#}'.trim().equals('') ? '-1' : '$c{iddepartamento:list#}';
+
+sql select 
+		iddepartamento "id", 
+		descricao "text",
+		iddepartamento, 
+		descricao departamento
+from 	departamento 
+where 	iddepartamento in ($v{iddepartamento}) 
+sql_var(sql_iddepartamento);
+
+
+<script_function name="update">
+	~write_exec_log;
+
+	set run = ""+execScript.getTarefaExecucao().setObs('$v{usuario} - salva_ocorrencia');
+
+	set msg1 = 'Salvo com sucesso.';
+	set msg2 = 'Erro ao salvar.';
+
+	connect $v{ds_bridge};
+
+
+	begin_transaction ;
+		run_script_java_groovy update;
+		if execScript.getValueVar('response').contains(execScript.getValueVar('msg2'));
+			rollback;
+			stop_if true;
+		end_if;
+	commit ;
+
+	<script_java_groovy name="update">
+		import bdo.util.SQLUtilX;
+		import com.elisha.commons.util.StringUtil;
+		import groovy.json.JsonSlurper;
+		import groovy.json.JsonOutput;
+		import org.postgresql.util.PGobject;
+		import groovy.sql.Sql;
+
+		def sql = new Sql(execScript.getConnection());
+
+		def objArray = new JsonSlurper().parseText(execScript.getValueVar('wffilatrabalho'));
+
+		String execId = execScript.getValueVar('execId');
+		String dataAtual = execScript.getValueVar('dataAtual');
+		String horaAtual = execScript.getValueVar('dataAtual"datetime:HH:mm:ss"');
+
+		String msg1 = execScript.getValueVar('msg1');
+		String msg2 = execScript.getValueVar('msg2');
+
+		SQLUtilX sqlUtilX = new SQLUtilX('wffilatrabalho', 'idwfatividaderealizada, observacao, idtarefaexecucaoatividaderealizada, dataatividaderealizada, horaatividaderealizada', 'idwffilatrabalho');
+		sqlUtilX.setConnectionX(execScript.getConnection());
+
+//		SQLUtilX suxLog = new SQLUtilX(
+//			'giovani_log_wfocorrencia_valores'
+//			,'valoresantigo, valoresnovo, idrequisicao'
+//			,'idwfocorrencia, idusuarioalteracao, dataalteracao, horaalteracao');
+//		suxLog.setConnectionX(execScript.getConnection());
+
+		sqlUtilX.setInt(null)
+				.setString(null)
+				.setInt(execId)
+				.setDate(dataAtual)
+				.setString(horaAtual);
+
+		String response = '';
+		String idWFFilatrabalho = '0';
+		String idWFOcorrencia = '-1';
+		String observacao;
+		String observacao2;
+		String observacao3;
+		boolean isNumber;
+
+//		int idRequisicao = sql.firstRow("select coalesce(max(idrequisicao),0)+1 from giovani_log_requisicao")[0];
+
+//		sql.execute("""
+//			INSERT INTO giovani_log_requisicao (idrequisicao, request)
+//			values(${idRequisicao}, '${execScript.getValueVar('wffilatrabalho').replaceAll('\'', '')}')
+//		""");
+
+		for (obj in objArray) {
+			if (obj.idwfatividaderealizada) {
+				idWFFilatrabalho += ',' + obj.idwffilatrabalho;
+				idWFOcorrencia += ',' + obj.idwfocorrencia;
+
+				String valores = '{ "obs": "' + obj.observacao + '" }';
+				def objValores = new JsonSlurper().parseText(valores);
+
+				PGobject json = new PGobject();
+				json.setType('json');
+				json.setValue(JsonOutput.toJson(objValores));
+
+
+				if (obj.containsKey("observacao")) {
+					try {
+						valor = (Double.parseDouble(obj.observacao));
+						isNumber = true;
+					} catch (NumberFormatException e) {	  
+						isNumber = false;
+					}
+					if (isNumber == true) {
+						observacao = "Qtd Estoque Correta: "+obj.observacao;
+					}
+					else {
+						observacao = obj.observacao;
+					}
+				}
+				else {
+					observacao = '';
+				}
+
+				if (obj.containsKey("observacao3")) {
+					try {
+						valor = (Double.parseDouble(obj.observacao3));
+						isNumber = true;
+					} catch (NumberFormatException e) {	  
+						isNumber = false;
+					}
+					if (isNumber) {
+						observacao3 = "Qtd. Produzido: "+obj.observacao3;
+					}
+					else {
+						observacao3 = obj.observacao3;
+					}
+				}	
+				else {
+						observacao3 = '';
+				}
+
+				if (obj.containsKey("observacao2")) {
+					if(obj.observacao2.length() > 2){
+						observacao2 = "Data de validade: "+obj.observacao2;
+					}
+					else {
+						observacao2 = obj.observacao2;
+					}
+				}
+				else {
+					observacao2 = '';
+				}
+
+				sqlUtilX.setIndex(-1)
+					.setIndexPK(-1)
+					.setInt(obj.idwfatividaderealizada)
+					.setString(observacao + " " + observacao2 + " " + observacao3)
+					.setIntPK(obj.idwffilatrabalho);
+
+				response = sqlUtilX.update(msg1, msg2);
+
+				if (response.contains(msg2)) {
+					break;
+				}
+
+//				response = suxLog.setIndex(-1)
+//					.setIndexPK(-1)
+//					.setObject(json)
+//					.setObject(null)
+//					.setInt(idRequisicao)
+//					.setIntPK(obj.idwfocorrencia)
+//					.setIntPK(Integer.parseInt(execScript.getValueVar('idUsuario')))
+//					.setDatePK(dataAtual)
+//					.setStringPK(horaAtual)
+//					.insertOrUpdate(msg1, msg2);
+	
+//				if (response.contains(msg2)) {
+//					break;
+//				}
+			}
+
+		}
+
+		execScript.addVar('response', response);
+		execScript.addVar('idWFFilatrabalho', idWFFilatrabalho);
+		execScript.addVar('idWFOcorrencia', idWFOcorrencia);
+
+		String execObs = execScript.getTarefaExecucao().getObs() + " - " + idWFFilatrabalho + "/" + idWFOcorrencia;
+		execScript.getTarefaExecucao().setObs(StringUtil.truncate(execObs, 256));
+
+		return true;
+	</script_java_groovy>
+  
+	if '$v{idWFFilatrabalho#0}'.equals('0');
+		set response = '{ "msg": "", "error": "" }';
+		stop_if true;
+	end_if;
+ 
+	# Finaliza as ocorrências
+	$include{script:HEAVEN-wf-finaliza-wfocorrencia-include}include
+
+	# Gera fila trabalho
+	$include{
+		script:HEAVEN-wf-gera-wffilatrabalho-sequencia-include, 
+		"'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'"
+	}include
+
+
+	<!--output-->
+	$> msgBuilder.setContentType('application/json');
+	$> sb.append('$v{response}');
+</script_function>
+
+
+# <script_function name="export">
+# 	set run = ""+execScript.getTarefaExecucao().setObs('$v{usuario} - export');
+#
+# 	set wffilatrabalho = execScript.getValueVar('wffilatrabalho').replace("'", "");
+#
+# 	connect $v{ds_bridge};
+#
+# 	sql 
+# 	Select 
+# 		(value->>'iddepartamento') as iddepartamento
+# 		,(value->>'departamento') as departamento
+# 		,(value->>'idsetor') as idsetor
+# 		,(value->>'setor') as setor
+# 		,(value->>'idgrupo') as idgrupo
+# 		,(value->>'grupo') as grupo
+# 		,(value->>'idfamilia') as idfamilia
+# 		,(value->>'familia') as familia
+# 		,(value->>'idproduto') as idproduto
+# 		,(value->>'produto') as produto
+# 		,(value->>'codigobarras') as codigobarras
+# 		,(value->>'valorprecovenda')::numeric as valorprecovenda
+# 		,(value->>'diassemvenda')::numeric as diassemvenda
+# 		,(value->>'diasentrada')::numeric as diasentrada
+# 		,(value->>'qtdultimaentrada')::numeric as qtdultimaentrada
+# 		,(value->>'valestoqueparado')::numeric as valestoqueparado
+# 		,(value->>'valorcustoaquisicao')::numeric as valorcustoaquisicao
+# 		,(value->>'qtdestoqueatual')::numeric as qtdestoqueatual
+# 		,(value->>'observacao') as observacao
+# 		,row_number() over() % 2 rn
+# 	From 
+# 		json_array_elements('$v{wffilatrabalho}')
+# 	sql_var(sql);
+#
+# 	xlsx
+# 		<name>filatrabalho</name>
+# 		<template>HEAVEN-wf-ruptura-marcacao-wfatividaderealizada-wffilatrabalho.xlsx</template>
+# 		<sqlvars>
+# 			<sqlvar>sql</sqlvar>
+# 		</sqlvars>;
+#
+# 	<!--output-->
+# 	<a href="$xlsx{filatrabalho}"></a>
+# </script_function>
