@@ -1,0 +1,123 @@
+# versao 1.1
+~write_exec_log;
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 07/03/2018 | Giovani	 |             |    	     | Criação
+# | 18/03/2020 | Giovani	 | Anderson    | 19533	     | Adicionado lógica de expirar ocorrência de produtos de composição quando o produto mestre teve venda.
+
+# 4 - Encontrado produto com estoque e sem venda
+set WFProcessoEvento_idWFProcessoEvento = 4;
+
+########################################
+# banco de dados Slave do cliente hipcom
+# para buscar os produtos de composição
+########################################
+connect dberp;
+
+sql 
+Select distinct
+	grploja as IDEMPRESA
+	,grpcodgrp as IDPRODUTOPAI
+	,grpcodplu as IDPRODUTOFILHO
+From
+	hipgrp
+Where
+	grptipo not in ('R') /* #! composição de preço de venda */
+sql_var(sql_produtos_composicao) no_exec;
+
+
+connect $v{ds_bridge};
+
+
+#########################################################
+# INSERE PRODUTOS DE COMPOSIÇÃO TEMPORARIAMENTE NO BRIDGE
+#########################################################
+set tempProdutosComposicao = 'temp_prod_comp_$v{idTarefa}_$v{execId}';
+
+sql_exec CREATE TEMPORARY TABLE $v{tempProdutosComposicao} (
+	idempresa integer,
+	idprodutopai integer,
+	idprodutofilho integer
+);
+
+begin_transaction;
+	sql_insert_by_column_names sql_produtos_composicao  into $v{tempProdutosComposicao} (IDEMPRESA,IDPRODUTOPAI,IDPRODUTOFILHO);
+commit;
+
+
+#################################
+# MAIN SQL: expira as ocorrencias
+#################################
+begin_transaction;
+
+	sql_exec 
+	Update 
+		wfocorrencia o 
+	Set
+		expirada = 'S',
+		dataexpiracao = current_date,
+		horaexpiracao = cast(current_time as char(8)),
+		idtarefaexecucaoexpiracao = $v{execId},
+		descricao =
+			coalesce(descricao,'')||' '||( Case
+				when exists (
+						Select	NULL
+						From	produtoresumo pr
+						Where	pr.dataultimavenda > o.datainclusao
+								and pr.idempresa = o.idempresa
+								and pr.idproduto = (o.chaves->>'idproduto')::bigint
+								and pr.qtdeultimavenda > 0.
+				) then 'Expirado pois produto teve venda'
+				when exists (
+					Select	NULL
+					From	produtoresumo pr
+							inner join $v{tempProdutosComposicao} pc on pc.idprodutopai = pr.idproduto and pc.idempresa = pr.idempresa
+					Where	pc.idprodutofilho = (o.chaves->>'idproduto')::bigint
+							and pr.dataultimavenda > o.datainclusao
+							and pr.idempresa = o.idempresa
+							and pr.qtdeultimavenda > 0.						
+				) then 'Expirado pois produto mestre de composição teve venda'
+				else 'Expirado pois estoque do produto ficou igual a 0'
+			end)
+	Where
+		o.idwfprocessoevento in ($v{WFProcessoEvento_idWFProcessoEvento})
+		and o.idwffilatrabalhofinalizacao is null
+		and o.expirada = 'N'
+		and o.chaves->>'idproduto' is not null
+		and (
+			/* #! Produto vendeu após inclusão da ocorrência */
+			exists (
+				Select	NULL
+				From	produtoresumo pr
+				Where	pr.dataultimavenda > o.datainclusao
+						and pr.idempresa = o.idempresa
+						and pr.idproduto = (o.chaves->>'idproduto')::bigint
+						and pr.qtdeultimavenda > 0.
+			)
+		or
+			/* #! Produto com estoque zero */
+			exists (
+				Select	NULL
+				From	estoquesaldoatual es
+				Where	es.idempresa = o.idempresa
+						and es.idproduto = (o.chaves->>'idproduto')::bigint
+				Group by es.idempresa,es.idproduto
+				Having sum(es.quantidade) = 0		
+			)
+		or
+			/* #! Produto pai do produto de composição teve venda */
+			exists (
+				Select	NULL
+				From	produtoresumo pr
+						inner join $v{tempProdutosComposicao} pc on pc.idprodutopai = pr.idproduto and pc.idempresa = pr.idempresa
+				Where	pc.idprodutofilho = (o.chaves->>'idproduto')::bigint
+						and pr.dataultimavenda > o.datainclusao
+						and pr.idempresa = o.idempresa
+						and pr.qtdeultimavenda > 0.						
+			)
+		)
+	;
+
+commit;
+
+debug $v{_lastSqlExecRowCount};

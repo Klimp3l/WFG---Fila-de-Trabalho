@@ -1,0 +1,77 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 10/05/2017 | Lucas        |             |             | Criação.
+
+#   | Parâmetro                                				| Default | Descrição
+# * | TarefaPrincipal_apelido                  				|         | Busca as configurações da tarefa principal
+# * | WFOcorrencia_apelidoTarefaEncaminhamento 				|         | Grava na tabela ocorrencia e chama a tarefa
+# * | WFFilatrabalho_idWFAtividade             				|         | Monitorar Ações do Comercial
+# * | WFFilatrabalho_idWFAtividadeRealizada_Promocionado    |         | Item Promocionado
+# * | WFFilatrabalho_idWFAtividadeRealizada_Reprecificado   |         | Item Reprecificado
+
+connect $v{ds_bridge};
+sql 
+With 
+	filatrabalho as (
+		Select
+			ft.idwffilatrabalho,
+			ft.idempresa,
+			o.chaves,
+			o.valores,
+			o.datainclusao datainclusaoocorrencia
+		From
+			wffilatrabalho ft
+			inner join wfocorrencia o on o.idwfocorrencia = ft.idwfocorrencia
+		Where
+			ft.idwfatividade in ($v{WFFilatrabalho_idWFAtividade})
+			and ft.expirada = 'N'
+			and o.expirada = 'N'
+			and ft.idwfatividaderealizada is null
+	),
+	tabelaverdade as (
+		/*
+		Copie e cole no excel para melhor visualização
+		Alteração de Preço	Promoção	Reprecificado	Promocionado
+		0	1	0	1
+		1	0	1	0
+		1	1	0	1
+		*/
+		select 0 alteracaopreco, 1 promocao, $v{WFFilatrabalho_idWFAtividadeRealizada_Promocionado} idwfatividaderealizada union all /* Item Promocionado */
+		select 1 alteracaopreco, 0 promocao, $v{WFFilatrabalho_idWFAtividadeRealizada_Reprecificado} idwfatividaderealizada union all /* Item Reprecificado */
+		select 1 alteracaopreco, 1 promocao, $v{WFFilatrabalho_idWFAtividadeRealizada_Promocionado} idwfatividaderealizada           /* Item Promocionado */
+	),
+	analise as (
+		select 
+			ft.*
+			,case when (ft.valores->>'valorprecovenda')::numeric <> ppc.valorprecovenda then 1 else 0 end alteracaopreco 
+			,case when current_date between ppc.datainiciopromocao and ppc.datafinalpromocao then 1 else 0 end promocao
+		from 
+			filatrabalho ft
+			inner join produtoprecocusto ppc on ppc.idproduto = (ft.chaves->>'idproduto')::bigint and ppc.idempresa = ft.idempresa
+	)
+select
+	a.idwffilatrabalho
+	,tv.idwfatividaderealizada 
+	,current_date dataatividaderealizada
+	,cast(current_time as char(8)) horaatividaderealizada
+	,$v{execId} idtarefaexecucaoatividaderealizada
+from
+	analise a
+	inner join tabelaverdade tv on tv.alteracaopreco = a.alteracaopreco and tv.promocao = a.promocao
+sql_var(WFFilaTrabalho) no_exec;
+
+
+begin_transaction ;	
+	sql_insert_update_by_column_names WFFilaTrabalho into WFFilaTrabalho
+	(idwfatividaderealizada, dataatividaderealizada, horaatividaderealizada, idtarefaexecucaoatividaderealizada)
+	(idwffilatrabalho=idwffilatrabalho);
+commit ;
+
+
+# Gera fila trabalho
+$include{
+	script:HEAVEN-wf-gera-wffilatrabalho-sequencia-include, 
+	"execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento')"
+}include

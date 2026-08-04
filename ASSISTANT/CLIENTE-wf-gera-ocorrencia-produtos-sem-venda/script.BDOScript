@@ -1,0 +1,167 @@
+~write_exec_log;
+# versão 1.1
+
+# Alterações:
+# |    Data    |  Programador | Solicitante | Caso Mantis | Descrição 
+# | 07/07/2017 | Lucas        |             |    11170    | Criação. 
+# | 24/04/2026 | Bernardo     | Henrique    |    38675    | Adicionado validação de metas de Grupo|Setor|Departamento. 
+
+~write_exec_log;
+
+$include{script-sql-busca-config-tarefa, "'HEAVEN-wf-gera-ocorrencia-produtos-sem-venda'"}include
+
+set diasUltimaOcorrencia = $c{HEAVEN-cfg-diasUltimaOcorrencia};
+set diasUltimaEntrada = $c{HEAVEN-cfg-diasUltimaEntrada};
+set diasUltimaVenda = $c{HEAVEN-cfg-diasUltimaVenda};
+set idMetaDepartamento = $c{HEAVEN-WFMeta_idMetaProdutosSemVenda#0};
+set idMetaSetor = $c{HEAVEN-WFMeta_idMetaProdutosSemVendaSetor#0};
+set idMetaGrupo = $c{HEAVEN-WFMeta_idMetaProdutosSemVendaGrupo#0};
+set ignoraDepartamento = '$c{cfg-ignoraDepartamento#}'.equals('') ? '' : ' and p.iddepartamento not in ($c{cfg-ignoraDepartamento#}) ';
+set ignoraSetor = '$c{HEAVEN-cfg-ignoraSetor#}'.equals('') ? '' : ' and p.idsetor not in ($c{HEAVEN-cfg-ignoraSetor#}) ';
+                      
+connect $v{ds_bridge};
+
+# Gera ocorrência para os produtos com saldo de estoque e sem venda
+sql_exec 
+With 
+estoqueatual as (
+	Select
+		esa.idempresa, 
+		esa.idproduto,
+		sum(esa.quantidade) estoquequantidade
+	From 
+		estoquesaldoatual esa
+	Group by
+		esa.idempresa, 
+		esa.idproduto
+	Having sum(esa.quantidade) > 0 		
+),
+produtosComEstoqueSemVenda as (
+	Select distinct
+		ea.*
+	From
+		estoqueatual ea
+		inner join produto p on p.idproduto = ea.idproduto
+		left join lateral (
+			Select
+				mm2.valor
+			From
+				metamercadologico mm2
+			Where
+				mm2.idmeta = $v{idMetaGrupo}
+				and mm2.idmercadologico = cast(p.idgrupo as varchar(32))
+				and mm2.valor > 0.
+				and current_date between mm2.datainicial and mm2.datafinal
+			Order by
+				mm2.datainicial desc
+			limit 1
+		) mm_g on true
+		left join lateral (
+			Select
+				mm2.valor
+			From
+				metamercadologico mm2
+			Where
+				mm2.idmeta = $v{idMetaSetor}
+				and mm2.idmercadologico = cast(p.idsetor as varchar(32))
+				and mm2.valor > 0.
+				and current_date between mm2.datainicial and mm2.datafinal
+			Order by
+				mm2.datainicial desc
+			limit 1
+		) mm_s on mm_g.valor is null
+		left join lateral (
+			Select
+				mm2.valor
+			From
+				metamercadologico mm2
+			Where
+				mm2.idmeta = $v{idMetaDepartamento}
+				and mm2.idmercadologico = cast(p.iddepartamento as varchar(32))
+				and mm2.valor > 0.
+				and current_date between mm2.datainicial and mm2.datafinal
+			Order by
+				mm2.datainicial desc
+			limit 1
+		) mm_d on mm_g.valor is null and mm_s.valor is null
+		inner join lateral (
+			Select
+				coalesce(mm_g.valor, mm_s.valor, mm_d.valor) valor
+		) mm on mm.valor is not null
+		inner join produtoresumo pr on pr.idproduto = ea.idproduto and pr.idempresa = ea.idempresa
+	Where
+		/* Possui estoque */
+		ea.estoquequantidade > 0.
+
+		/* Irá subir APENAS produtos ligados a FINALIDADE DE VENDAS    */ 
+		and p.idprodutofinalidade in ($v{tgfinalidadesvendas})
+
+		/* Não existe venda após a compra */
+		and greatest(pr.dataultimaentrada, pr.dataultimavenda, current_date - cast(mm.valor as int)) <=  current_date - cast(mm.valor as int)
+
+		/* Não existe nenhuma ocorrência sem finalização */
+		and not exists (
+			Select 	null
+			From 	wfocorrencia o
+			Where 	o.expirada = 'N' 
+					and o.idempresa = ea.idempresa
+					and (o.chaves->>'idproduto')::bigint = ea.idproduto
+					and o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+					and o.idwffilatrabalhofinalizacao is null
+		)
+
+		/* Não existe nenhuma ocorrência semelhante nos últimos tempos */
+		and not exists (
+			Select 	null
+			From 	wfocorrencia o
+			Where 	o.expirada = 'N' 
+					and o.idempresa = ea.idempresa
+					and (o.chaves->>'idproduto')::bigint = ea.idproduto
+					and o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+					and o.idwffilatrabalhofinalizacao is null
+					and o.datainclusao between current_date - $v{diasUltimaOcorrencia} and current_date
+		)
+
+		/* Produto ativo como venda */
+		and exists (
+			Select 	null
+			From 	produtoempresa pe
+			Where 	pe.situacaovenda = 'A' 
+					and pe.idempresa = ea.idempresa
+					and pe.idproduto = ea.idproduto
+		)
+
+		$v{ignoraDepartamento}
+		$v{ignoraSetor}
+),
+ocorrencias as (
+	Select 
+		$v{WFProcessoEvento_idWFProcessoEvento} idwfprocessoevento
+		,x.idempresa
+		,jsonb_build_object('idproduto', x.idproduto) chaves
+		,'A' tipoinclusao
+		,'A' tipoencaminhamento
+		,'$v{WFOcorrencia_apelidoTarefaEncaminhamento}' apelidotarefaencaminhamento
+		,jsonb_build_object(
+			'estoquequantidade', x.estoquequantidade,
+			'valorprecovenda', ppc.valorprecovenda
+		) valores
+		,current_date datainclusao
+		,cast(current_time as char(8)) horainclusao
+		,$v{idUsuario} idusuarioinclusao
+		,$v{execId} idtarefaexecucaoinclusao
+	From
+		produtosComEstoqueSemVenda x
+		left join produtoprecocusto ppc on ppc.idproduto = x.idproduto and ppc.idempresa = x.idempresa
+)
+Insert into WFOcorrencia (idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao)
+Select 	idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao
+From 	ocorrencias
+;
+
+# Gera fila de trabalho inicial
+$include{
+	script:HEAVEN-wf-gera-wffilatrabalho-inicial-include, 
+	"execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento')",
+	"execScript.getValueVar('WFProcessoEvento_idWFProcessoEvento')"
+}include

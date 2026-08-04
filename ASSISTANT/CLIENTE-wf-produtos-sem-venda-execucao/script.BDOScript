@@ -1,0 +1,77 @@
+# versao 1.0
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 13/05/2017 | Lucas       |             |    	     | 
+
+$include{script-sql-interrompe-exec-etl, "etl-execucao"}include
+
+connect $v{ds_bridge};
+
+
+set fim  = 'Fim :)';
+
+~write_exec_log;
+
+#sql_exec delete from wffilatrabalho;
+#sql_exec delete from wfocorrencia;
+
+sql 
+With 
+	tarefas as (
+/* Expira as ocorrencias */
+		/* Select 'CLIENTE-wf-produtos-sem-venda-expira-ocorrencia' apelido Union all Executa todo dia automaticamente */
+
+		/* Gera as ocorrências */
+		Select 'CLIENTE-wf-gera-ocorrencia-produtos-sem-venda' apelido Union all 
+
+		/* Monitoramento */
+		Select 'HEAVEN-wf-produtos-sem-venda-monitoramento-alteracao-comercial' apelido Union all 
+
+		/* Gera relatórios */
+		Select 'HEAVEN-wf-produtos-sem-venda-relatorio-auditoria' apelido Union all 
+		--Select 'HEAVEN-wf-produtos-sem-venda-relatorio-comercial' apelido Union all 
+		Select 'HEAVEN-wf-produtosemvenda-relatorio-analise-resultado' apelido Union all
+
+
+		/* Fim */
+		Select '$v{fim}'
+	)
+Select
+	'' email,
+	0 tipo,
+	t.apelido id
+From
+	tarefas t
+sql_var(sql_for_each) ;
+
+$include{script-sql-busca-config-tarefa, "'HEAVEN-wf-produtos-sem-venda-execucao'"}include
+
+for_each_dest <columnDest>email</columnDest>
+	<columnDestType>tipo</columnDestType>
+	<columnId>id</columnId>
+	<sqlVar>$v{sql_for_each}</sqlVar>;
+
+stop_if '$v{id}'.equals('$v{fim}');
+
+run_script_java_groovy run;
+
+<script_java_groovy name="run">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+
+	ExecScript execScriptChild = new ExecTarefa(execScript.getValueVar('id'), execScript).getExecScriptChild();
+	execScriptChild.addVar('WFMeta_idMetaProdutosSemVenda', execScript.getValueCol('HEAVEN-WFMeta_idMetaProdutosSemVenda')); /* Meta Produtos sem venda */
+	execScriptChild.addVar('WFProcesso_idWFProcesso', execScript.getValueCol('HEAVEN-WFProcesso_idWFProcesso')); /* Produtos sem venda */
+	execScriptChild.addVar('WFFilatrabalho_idWFAtividade_ProdutosSemVenda_Auditoria', execScript.getValueCol('HEAVEN-WFFilatrabalho_idWFAtividade_ProdutosSemVenda_Auditoria')); /* Atividades de Auditoria de produto sem venda */
+	execScriptChild.addVar('WFFilatrabalho_idWFAtividade_ProdutosSemVenda_Comercial', execScript.getValueCol('HEAVEN-WFFilatrabalho_idWFAtividade_ProdutosSemVenda_Comercial')); /* Atividades do Comercial de produto sem venda */
+	execScriptChild.addVar('WFFilatrabalho_idWFAtividade', execScript.getValueCol('HEAVEN-WFFilatrabalho_idWFAtividade')); /* Atividade Monitora ações do comercial */
+	execScriptChild.addVar('WFFilatrabalho_idWFAtividadeRealizada_Promocionado', execScript.getValueCol('HEAVEN-WFFilatrabalho_idWFAtividadeRealizada_Promocionado')); /* Atividade Realizada Item Promocionado */
+	execScriptChild.addVar('WFFilatrabalho_idWFAtividadeRealizada_Reprecificado', execScript.getValueCol('HEAVEN-WFFilatrabalho_idWFAtividadeRealizada_Reprecificado')); /* Atividade Realizada Item Reprecificado */
+	execScriptChild.addVar('WFProcessoEvento_idWFProcessoEvento', execScript.getValueCol('HEAVEN-WFProcessoEvento_idWFProcessoEvento')); /* Encontrado produto com estoque e sem venda */
+	execScriptChild.addVar('WFOcorrencia_apelidoTarefaEncaminhamento', 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico');
+	
+	execScriptChild.run();
+</script_java_groovy>
+
+
