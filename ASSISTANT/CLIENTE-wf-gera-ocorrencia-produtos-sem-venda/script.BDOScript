@@ -131,6 +131,40 @@ produtosComEstoqueSemVenda as (
 					and pe.idproduto = ea.idproduto
 		)
 
+		/* Não existe nenhuma ocorrência nos ultimos X dias na fila a transferir */
+		and not exists (
+			Select 	null
+			From 	
+				wfocorrencia o
+				inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+				inner join wfprocessoevento peOrigem on (
+					peOrigem.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+				)
+				inner join wfatividade aDestino on (
+					aDestino.idwfatividade = ft.idwfatividade
+					and aDestino.situacao = 'A'
+				)
+				inner join wfatividaderealizada ar on (
+					ar.idwfprocesso = peOrigem.idwfprocesso
+					and ar.idwfatividadeinicialtransferir = ft.idwfatividade
+				)
+				inner join wfprocessoevento peDestino on (
+					peDestino.idwfprocessoevento = ar.idwfprocessoeventotransferir
+					and peDestino.situacao = 'A'
+				)
+			Where 	
+					o.idwfprocessoevento = ar.idwfprocessoeventotransferir
+					and o.idempresa = ea.idempresa
+					and (o.chaves->>'idproduto')::bigint = ea.idproduto
+					and o.expirada = 'N' 
+					and ft.expirada = 'N'
+					and o.idwffilatrabalhofinalizacao is null
+					and ft.idwfatividaderealizada is null
+					and ar.idwfprocessoeventotransferir is not null
+					and ar.idwfatividadeinicialtransferir is not null
+					and o.datainclusao between current_date - $v{diasUltimaOcorrencia} and current_date
+		)
+
 		$v{ignoraDepartamento}
 		$v{ignoraSetor}
 ),

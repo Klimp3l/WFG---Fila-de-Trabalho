@@ -1,187 +1,846 @@
-$> import com.elisha.commons.util.CryptUtil;
-$> msgBuilder.setContentEncoding('gzip');
-$> msgBuilder.setCharset('UTF-8');
-$> msgBuilder.setReplaceVarsOnTemplate(true);
-$> msgBuilder.setHtmlTemplates('$v{embedded#}'.equals('true') ? 'element-crud-1.html' : 'element-crud-1.html');
-$> msgBuilder.setContentSections('css', 'body', 'js');
+$> msgBuilder.setContentType("text/html");
+$> msgBuilder.setCharset("ISO-8859-1");
 
-$> sb.append("""<link rel="stylesheet" type="text/css" href="odwctrl?action=execTarefa&apelido=element-ui-crud-base-css&tKey=${CryptUtil.getHexHash('#element-ui-crud-base-css.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}" />\n\n""");
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html;charset=ISO-8859-1">
 
-<style>
-	.apps-panel {
-		width: 100%;
-		min-height: calc(100vh - 40px);
-		padding: 28px 20px 40px;
-		box-sizing: border-box;
-		background: linear-gradient(160deg, #f0f4f8 0%, #e8eef5 45%, #f7f9fc 100%);
-	}
+	<link rel="stylesheet" href="js/bootstrap-3.2.0/css/bootstrap.min.css">
+	<link rel="stylesheet" href="js/bootstrap-table-1.8.1/bootstrap-table.min.css">
 
-	.apps-panel__header {
-		max-width: 720px;
-		margin: 0 auto 28px;
-		text-align: center;
-	}
+	<link rel="stylesheet" href="https://code.jquery.com/ui/1.11.0/themes/smoothness/jquery-ui.css">
 
-	.apps-panel__title {
-		margin: 0 0 6px;
-		font-size: 1.55rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: #1a2b3c;
-	}
-
-	.apps-panel__subtitle {
-		margin: 0;
-		font-size: 0.95rem;
-		color: #5a6d7e;
-	}
-
-	.apps-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-		gap: 16px;
-		max-width: 720px;
-		margin: 0 auto;
-	}
-
-	.apps-card {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 14px;
-		min-height: 148px;
-		padding: 22px 16px;
-		text-decoration: none !important;
-		color: #1a2b3c !important;
-		background: #fff;
-		border: 1px solid rgba(26, 43, 60, 0.08);
-		border-radius: 16px;
-		box-shadow: 0 4px 14px rgba(26, 43, 60, 0.06);
-		transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.apps-card:hover,
-	.apps-card:focus {
-		transform: translateY(-3px);
-		border-color: rgba(26, 43, 60, 0.14);
-		box-shadow: 0 10px 24px rgba(26, 43, 60, 0.12);
-		outline: none;
-	}
-
-	.apps-card:active {
-		transform: translateY(-1px);
-	}
-
-	.apps-card__icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 56px;
-		height: 56px;
-		border-radius: 14px;
-		font-size: 1.55rem;
-		color: #fff;
-		overflow: hidden;
-	}
-
-	.apps-card__icon img {
-		display: block;
-		width: 34px;
-		height: 34px;
-		object-fit: contain;
-	}
-
-	.apps-card__icon--fila {
-		background: linear-gradient(145deg, #f3ebff 0%, #e8d8ff 100%);
-	}
-
-	/* Exemplo para próximos apps:
-	.apps-card__icon--inventario { background: linear-gradient(145deg, #0f9d7a 0%, #0a6e56 100%); }
-	.apps-card__icon--producao  { background: linear-gradient(145deg, #e67e22 0%, #c45d0a 100%); }
-	*/
-
-	.apps-card__label {
-		font-size: 0.98rem;
-		font-weight: 600;
-		line-height: 1.25;
-		text-align: center;
-	}
-
-	.apps-card__hint {
-		font-size: 0.78rem;
-		font-weight: 400;
-		color: #6b7c8d;
-		text-align: center;
-		line-height: 1.3;
-	}
-
-	@media (max-width: 420px) {
-		.apps-panel {
-			padding: 20px 14px 32px;
+	<style>
+		.row {
+			margin: 0 !important;
+		}
+		.input-lg, .form-horizontal .form-group-lg .form-control {
+		    font-size: 1em !important;
+		    line-height: normal;
+		}
+		.fixed-table-container thead th .th-inner {
+			white-space: normal;
+		}
+		.fixed-table-header {
+			height: 88px;
+		}
+		.fixed-table-container {
+			height: calc(100vh - 210px);
+		}
+		th {
+		    text-align: center!important;
+		}
+		
+		div#custom-toolbar > * {
+			margin: 0 36px;
+		}
+		
+		.includeLoader {
+			display: none;
+			z-index: 9999;
+		}
+		.includeLoader.includeSpinner {
+		    border: 16px solid #f3f3f3; /* Light grey */
+		    border-top: 16px solid #3498db; /* Blue */
+		    border-radius: 50%;
+		    width: 120px;
+		    height: 120px;
+		    animation: spin 2s linear infinite;
+		    left: calc(50% - 60px);
+		    top: calc(50% - 60px);
+		    position: fixed;
+		}
+		.includeLoader.includeBackground {
+		    width: 100%;
+		    height: 100%;
+		    position: fixed;
+		    background: #00000059;    
+			left: 0;
+		    top: 0;
+		}
+		.includeLoader.includeText {
+			left: 40px;
+			top: calc(50% - -120px);
+			position: fixed;
+			color: white;
+			font-size: 17px;
+			font-weight: bold;
+			width: 100%;
+			text-align: center;
+		}
+		@keyframes spin {
+		    0% { transform: rotate(0deg); }
+		    100% { transform: rotate(360deg); }
 		}
 
-		.apps-grid {
-			grid-template-columns: repeat(2, 1fr);
-			gap: 12px;
+
+		.bootstrap-table .table>thead>tr>th {
+		    vertical-align: top !important;
 		}
-
-		.apps-card {
-			min-height: 132px;
-			padding: 18px 12px;
-			border-radius: 14px;
+		.fixed-table-header {
+		    height: 114px !important;
 		}
-	}
-</style>
+	</style>
 
-<!--section-->
+</head>
+<body>
 
-<el-container>
-	<div class="apps-panel">
-		<header class="apps-panel__header">
-			<h1 class="apps-panel__title">Apps internos</h1>
-			<p class="apps-panel__subtitle">Acesse os aplicativos disponíveis</p>
-		</header>
+	<div class="includeLoader includeBackground"></div>
+	<div class="includeLoader includeSpinner"></div>
+	<div class="includeLoader includeText">Processando, favor aguardar finalização da execução.</div>
 
-		<nav class="apps-grid" aria-label="Aplicativos internos">
-			<a
-				class="apps-card"
-				href="./pwa/fila/index.html"
-				target="_blank"
-				rel="noopener noreferrer"
-			>
-				<span class="apps-card__icon apps-card__icon--fila" aria-hidden="true">
-					<img
-						src="./pwa/fila/favicon.svg"
-						alt=""
-						width="34"
-						height="34"
-					/>
-				</span>
-				<span class="apps-card__label">Fila de Trabalho</span>
-			</a>
+	<div class="row">
+		<div class="col-md-12">
+		    <div id="custom-toolbar">
+				<button type="button" class="btn btn-success btn-md" onclick="doSave()">
+					<span class="glyphicon glyphicon-ok"></span> Salvar
+				</button>
 
-			<!--
-			Modelo para novos apps:
-			<a class="apps-card" href="URL_DO_APP" target="_blank" rel="noopener noreferrer">
-				<span class="apps-card__icon apps-card__icon--inventario" aria-hidden="true">
-					<i class="el-icon-fa-cubes"></i>
-				</span>
-				<span class="apps-card__label">Nome do App</span>
-				<span class="apps-card__hint">Descrição curta</span>
-			</a>
-			-->
-		</nav>
+				<div class="btn-group" role="group" aria-label="...">
+					<div class="btn-group" role="group">
+						<button type="button" id="filter-departamento" class="btn btn-info btn-md btn-block dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							<span class="glyphicon glyphicon-filter"></span> Selecione um departamento...
+						</button>
+						<ul class="dropdown-menu list-group"  style="width: 100%;">
+							$> for (a = 1; a <= $c{departamento:count}; a++) {
+								<li class="list-group-item" onclick="filterDepartamento(~~~)"><h4>~~~</h4></li> -> $c{iddepartamento[a]}; $c{departamento[a]};
+							$> }
+						</ul>
+				    </div>
+				    
+			        <button type="button" class="btn btn-primary btn-md" onclick="doExport()">
+					    <span class="glyphicon glyphicon-cloud-download"></span> Exportar
+					</button>
+				</div>
+				
+				<span type="button" class="title lead"></span>
+
+				<div class="btn-group" role="group" aria-label="...">
+					<button type="button" class="btn btn-danger btn-md" onclick="history.go(0);">
+					    <span class="glyphicon glyphicon-arrow-left"></span> Voltar
+					</button>
+			        <button type="button" class="btn btn-primary btn-md" onclick="location.href=\'odwctrl?action=menu\'">
+					    <span class="glyphicon glyphicon-tasks"></span> Menu
+					</button>
+				</div>
+
+				<div class="btn-group" role="group">
+					<button type="button" class="btn btn-success btn-md" onclick="openAddProdutoModal()">
+						<span class="glyphicon glyphicon-plus"></span> Incluir
+					</button>
+				</div>
+
+				<div style="margin:10px;">
+					<div class="btn-group" role="group" aria-label="...">
+						<div class="btn-group" role="group">
+							<button type="button" id="apply-atividaderealizada" class="btn btn-info btn-md btn-block dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+								Selecione uma opção...
+							</button>
+							<ul class="dropdown-menu list-group"  style="width: 100%;">
+							$> for (a = 1; a <= $c{idwfatividaderealizada:count}; a++) {
+								<li class="list-group-item" onclick="setCurrAtvRealizada(~~~)"><h4>~~~</h4></li> -> $c{idwfatividaderealizada[a]}; $c{atividaderealizada[a]};
+							$> }
+							</ul>
+						</div>
+				        <button type="button" class="btn btn-primary btn-md" onclick="applyAtvRealizada()">
+						    Aplicar nos selecionados
+						</button>
+					</div>
+				</div>
+
+				<div name="alert_primary" style="position: absolute;top: 0;z-index: 10;width:25vw;"></div>
+		    </div>
+			<table id="data-table"></table>
+		</div>
 	</div>
-</el-container>
-<!--section-->
 
-<!-- Moment -->
-<script type="text/javascript" charset="UTF-8" src="js/moment-2.18.1/moment-with-locales.min.js"></script>
+	<div id="modal" class="modal fade">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h1 class="modal-title"></h1>
+	      </div>
+	      <div class="modal-body">
+	      </div>
+	    </div><!-- /.modal-content -->
+	  </div><!-- /.modal-dialog -->
+	</div><!-- /.modal -->
 
-<!--v-Money-->
-<script src="js/vue-components/v-money/v-money.js"></script>
+	<div id="sync-modal" class="modal fade">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="sync-modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Atenção</h4>
+	      </div>
+	      <div class="modal-body">
+	        Existem algumas atividades realizadas salvadas temporariamente, deseja salvar por definitivo agora?
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-default" data-dismiss="modal">Não</button>
+	        <button type="button" class="btn btn-success" onclick="doSave()"><span class="glyphicon glyphicon-ok"></span> Sim</button>
+	      </div>
+	    </div><!-- /.modal-content -->
+	  </div><!-- /.modal-dialog -->
+	</div><!-- /.modal -->
 
-<!--Custom-->
-$> sb.append("""<script type="text/javascript" charset="UTF-8" src="odwctrl?action=execTarefa&apelido=element-ui-crud-base-js&tKey=${CryptUtil.getHexHash('#element-ui-crud-base-js.$v{dataAtual}#', CryptUtil.ALGORITH_SHA)}"></script>\n""");
+	<div id="add-modal" class="modal fade">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Adicionar produto</h4>
+	      </div>
+	      <div class="modal-body">
+	      	<div name="alert_placeholder"></div>
+			<form id="form-add">
+				<div class="form-group">
+					<label for="idproduto">Còdigo Interno</label>
+					<input type="number" class="form-control" name="idproduto" id="idproduto">
+				</div>
+				<div class="form-group">
+					<label for="codigobarras">Código de Barras</label>
+					<input type="text" class="form-control" name="codigobarras" id="codigobarras">
+				</div>
+				<div class="form-group">
+					<label for="qtdvencer">Qtd. a Vencer</label>
+					<input type="number" class="form-control" name="qtdvencer" id="qtdvencer" required>
+				</div>
+				<div class="form-group">
+					<label for="datavencimento">Data de Vencimento</label>
+					<input type="text" class="form-control" name="datavencimento" id="datavencimento" maxlength="10" placeholder="dd/mm/aaaa" inputmode="numeric" required>
+				</div>
+<!--				<button type="submit" class="btn btn-primary">Adicionar</button>-->
+			</form>
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+	        <button type="button" class="btn btn-success" onclick="doSaveNewProduct()"><span class="glyphicon glyphicon-ok"></span> Adicionar</button>
+	      </div>
+	    </div><!-- /.modal-content -->
+	  </div><!-- /.modal-dialog -->
+	</div><!-- /.modal -->
+
+</body>
+
+	<script src="js/jquery-2.1.0.min.js" type="text/javascript" language="javascript"></script>
+
+	<script src="js/bootstrap-3.2.0/js/bootstrap.min.js" type="text/javascript" language="javascript"></script>
+
+    <script src="js/bootstrap-table-1.8.1/bootstrap-table.min.js"></script>
+	<script src="js/bootstrap-table-1.8.1/locale/bootstrap-table-pt-BR.min.js" charset="UTF-8"></script>
+
+	<script src="https://code.jquery.com/ui/1.11.0/jquery-ui.js"></script>
+
+<script_content name="funcs">
+
+		bootstrap_alert = function() {}
+		bootstrap_alert.warning = function (message) {
+        	$('[name=alert_placeholder]').append('<div class="alert alert-danger"><a class="close" data-dismiss="alert">×</a><span>'+message+'</span></div>')
+        }
+		bootstrap_alert.success = function (message) {
+        	$('[name=alert_primary]').append('<div class="alert alert-success"><span><span class="glyphicon glyphicon-ok" aria-hidden="true"></span>'+message+'</span></div>')
+
+        	setTimeout(function () {
+        		$('[name=alert_primary]').html('');
+        	}, 3000);
+        }
+	function getFormData($form) {
+		var unindexed_array = $form.serializeArray();
+		var indexed_array = {};
+		
+		$.map(unindexed_array, function(n, i){
+		    indexed_array[n['name']] = n['value'];
+		});
+		
+		return indexed_array;
+	}
+
+	function doSaveNewProduct() {
+		let data = getFormData($("form"));
+		data.idempresa = idempresa;
+		data.datavencimento = maskDateValue(data.datavencimento || '');
+		$("#datavencimento").val(data.datavencimento);
+		var dateValidation = validateDateByBusinessRule(data.datavencimento);
+		$('[name=alert_placeholder]').html('');
+		if (!(data.codigobarras || data.idproduto)) {
+			bootstrap_alert.warning('Por favor, informe o código interno ou de barras.');
+		}
+		if (!data.qtdvencer) {
+			bootstrap_alert.warning('Por favor, informe a quantidade.');
+		}
+		if (!data.datavencimento) {
+			bootstrap_alert.warning('Por favor, informe a data de vencimento.');
+		} else if (data.datavencimento.length !== 10 || !isValidDate(data.datavencimento)) {
+			bootstrap_alert.warning('Por favor, informe uma data de vencimento válida no formato dd/mm/aaaa.');
+		} else if (!dateValidation.isValid) {
+			bootstrap_alert.warning(dateValidation.message);
+		}
+		
+		if ((data.codigobarras || data.idproduto) && data.qtdvencer && data.datavencimento && data.datavencimento.length === 10 && isValidDate(data.datavencimento) && dateValidation.isValid) {
+			$('[name=alert_placeholder]').html('');
+			$('.includeLoader').show();
+		    $.ajax({
+		        type: "POST",
+		        dataType: "json",
+		        url: "odwctrl?action=execTarefa&ajax=true&scriptFunction=addNewProduto&idTarefa=" + idTarefa,
+		        data: data,
+		        contentType: "application/x-www-form-urlencoded; charset=ISO-8859-1",
+		        success: function (response) {
+		        	$('.includeLoader').hide();
+		        	if (response.error === '') {
+						$("#add-modal").modal('hide');
+		        		bootstrap_alert.success(response.msg);
+		        	} else {
+		        		$('.includeLoader').hide();
+		        		bootstrap_alert.warning(response.error);
+		        	}
+		        },
+		        fail: function () {
+		        	$('.includeLoader').hide();
+		        	bootstrap_alert.warning("Erro ao conectar no servidor. Contate o suporte ajuda@iandev.com.br");
+		        },
+		        error: function () {
+		        	$('.includeLoader').hide();
+		        	bootstrap_alert.warning("Erro ao conectar no servidor. Contate o suporte ajuda@iandev.com.br");
+		        }
+		    });
+		}
+	}
+	function openAddProdutoModal() {
+		$("#add-modal").modal('show');
+	}
+
+	function syncData() {
+		return new Promise(resolve => {
+			let tempData = localStorage.getItem(key);
+			if (tempData) {
+				tempData = JSON.parse(tempData);
+				let data = $table.bootstrapTable('getData');
+				for (var i = 0; i < data.length; i++) {
+					var row = tempData.filter(index => (index.idwffilatrabalho === data[i].idwffilatrabalho))[0];
+					if (row) {
+						data[i] = row;
+						$table.bootstrapTable('updateRow', {index: i, row: data[i]});
+						//return dropDownRender(data[i].idwfatividaderealizada, data[i], i, "idwfatividaderealizada");
+					}
+				}
+			}
+			resolve(true);
+		});
+	}
+
+	function doSaveTemp() {
+		let data = $.grep($table.bootstrapTable("getData"), function(r) { return r.idwfatividaderealizada });
+		localStorage.setItem(key, JSON.stringify(data));
+	}
+
+	function doSave() {
+		$("#sync-modal").modal('hide');
+		var records = $.grep($table.bootstrapTable("getData"), function(r) { return r.idwfatividaderealizada });
+		var invalidDateMessage = validateRecordsDateRange(records);
+		if (invalidDateMessage) {
+			showPrimaryWarning(invalidDateMessage);
+			return;
+		}
+		$('.includeLoader').show();
+	    $.ajax({
+	        type: "POST",
+	        dataType: "json",
+	        url: "odwctrl?action=execTarefa&ajax=true&scriptFunction=update&idTarefa=" + idTarefa,
+	        data: { wffilatrabalho: JSON.stringify(records) }, 
+	        contentType: "application/x-www-form-urlencoded; charset=ISO-8859-1",
+	        success: function(response) {
+	        	$('.includeLoader').hide();
+				if(showResponse(response)) {
+					localStorage.removeItem(key);
+					hideRows(getRecids(records).split(","));			
+				}
+	        }
+	    });
+	}
+
+	function getRecids(records) {
+		var recids = "0";
+		for(var r in records) {
+			recids += "," + records[r].recid;
+		}
+		return recids;
+	}
+
+	function doExport() {
+	    $.ajax({
+	        type: "POST",
+	        dataType: "text",
+	        url: "odwctrl?action=execTarefa&ajax=true&scriptFunction=export&idTarefa=" + idTarefa,
+	        data: { wffilatrabalho: JSON.stringify($table.bootstrapTable("getData")) }, 
+	        contentType: "application/x-www-form-urlencoded; charset=ISO-8859-1",
+	        success: function(response) {
+	            $("<iframe>", { src: $(response).filter("a").attr("href") })
+	            	.hide()
+	            	.appendTo($("body"));
+	        }
+	    });
+	}
+
+	function showResponse(response) {
+		var error = response.error.length > 0;
+		$(".modal-title").html((error ? "<span class=\'glyphicon glyphicon-remove-circle\'></span>" : "<span class=\'glyphicon glyphicon-ok-circle\'></span> ") + response.msg);
+		$(".modal-body").html(error ? "<div class=\'alert alert-danger\' role=\'alert\'> " + response.error + "</div>" : "");
+		$("#modal").modal("show");
+		return !error;
+	}
+
+	function hideRows(recids) {
+		$table.bootstrapTable("remove", { field: "recid", values: recids });
+	}
+
+    function setDropDown(rowIndex, fieldName, fieldValue) {
+		$table.bootstrapTable("updateCell", { rowIndex: rowIndex, fieldName: fieldName, fieldValue: fieldValue });
+    }
+
+    function filterDepartamento(iddepartamento) {
+		var par = { iddepartamento: iddepartamento };
+		$("#filter-departamento").html(getText(par, "iddepartamento", labels.iddepartamento));
+		$table.bootstrapTable("filterBy", par);
+    }
+
+    function setCurrAtvRealizada(idwfatividaderealizada) {
+    	_idwfatividaderealizada = idwfatividaderealizada;
+		var par = { idwfatividaderealizada: idwfatividaderealizada };
+		$("#apply-atividaderealizada").html(getText(par, "idwfatividaderealizada", labels.idwfatividaderealizada));
+    }
+
+	function applyAtvRealizada() {
+		let allTableData = $table.bootstrapTable("getData");
+		let data = $table.bootstrapTable('getSelections');
+		console.log(data);
+		for (var i = 0; i < data.length; i++) {
+			for (var j = 0; j < allTableData.length; j++) {
+				if (data[i].recid === allTableData[j].recid) {
+					$table.bootstrapTable('updateRow', {
+						index: j,
+						row: {
+							idwfatividaderealizada: _idwfatividaderealizada,
+						}
+					});
+				}
+			}
+		}
+		//$table.bootstrapTable('refresh');
+	}
+
+    function textRender(value, row, index, fieldName){
+		if (row.idwfatividade === 30010 && fieldName !== 'observacao') {
+    		return value;
+    	}  else if (!value) {
+			value = '';
+		}
+    	return [
+			\'<div class="input-group">\',
+				\'<input class="render" type="text" class="form-control"\'
+				+ \' onload="new NumberLoad(this, \' + index + \', \\\'\' + fieldName + \'\\\')"\'
+				+ \' value="\' + value + \'"\'
+				+ \' name="\' + fieldName + \'"\'
+				+ \'/>\',
+			\'</div>\'
+    	].join("");
+    }
+
+    function numberRender(value, row, index, fieldName){
+			if (row.idwfatividade === 30010) {
+    		return value;
+    	}
+    	return [
+			\'<div class="input-group">\',
+				\'<input class="render" type="number" class="form-control"\'
+				+ \' onload="new NumberLoad(this, \' + index + \', \\\'\' + fieldName + \'\\\')"\'
+				+ \' value="\' + value + \'"\'
+				+ \' name="\' + fieldName + \'"\'
+				+ \'/>\',
+			\'</div>\'
+    	].join("");
+    }
+
+	function NumberLoad(el, rowIndex, fieldName) {
+		$(el).change(function () {
+			$table.bootstrapTable("updateCell", { rowIndex: rowIndex, fieldName: fieldName, fieldValue: this.value });
+		});
+	}
+
+	function calendarRender(value, row, index, fieldName){
+		if (row.idwfatividade === 30010) {
+    		return value;
+    	} else if (value == null) {
+			value = '';
+    	}
+    	return [
+			\'<div class="input-group">\',
+				\'<input class="render" type="text" class="form-control"\'
+				+ \' onload="new DatePicker(this, \' + index + \', \\\'\' + fieldName + \'\\\')"\'
+				+ \' value="\' + value + \'"\'
+				+ \' maxlength="10"\'
+				+ \' placeholder="dd/mm/aaaa"\'
+				+ \' inputmode="numeric"\'
+				+ \' name="\' + fieldName + \'"\'
+				+ \'/>\',
+			\'</div>\'
+    	].join("");
+    }
+
+	function DatePicker(el, rowIndex, fieldName) {
+		console.log(el);
+		var $el = $(el);
+		bindDateMask($el);
+		$el.datepicker({
+			dateFormat: "dd/mm/yy"
+		}).change(function () {
+			this.value = maskDateValue(this.value);
+			if (!isValidDate(this.value)) {
+				this.value = '';
+			} else {
+				var dateValidation = validateDateByBusinessRule(this.value);
+				if (!dateValidation.isValid) {
+					this.value = '';
+					showPrimaryWarning(dateValidation.message);
+				}
+			}
+			$table.bootstrapTable("updateCell", { rowIndex: rowIndex, fieldName: fieldName, fieldValue: this.value });
+		});
+	}
+
+	function showPrimaryWarning(message) {
+		$('[name=alert_primary]').append('<div class="alert alert-danger"><span><span class="glyphicon glyphicon-warning-sign" aria-hidden="true"></span> '+message+'</span></div>');
+		setTimeout(function () {
+			$('[name=alert_primary]').html('');
+		}, 4000);
+	}
+
+	function maskDateValue(value) {
+		var digits = (value || '').replace(/\\D/g, '').substring(0, 8);
+		var day = digits.substring(0, 2);
+		var month = digits.substring(2, 4);
+		var year = digits.substring(4, 8);
+		var formatted = day;
+		if (month.length) {
+			formatted += '/' + month;
+		}
+		if (year.length) {
+			formatted += '/' + year;
+		}
+		return formatted;
+	}
+
+	function bindDateMask($input) {
+		$input.on('input', function() {
+			var maskedValue = maskDateValue(this.value);
+			if (this.value !== maskedValue) {
+				this.value = maskedValue;
+			}
+		}).on('blur', function() {
+			if (this.value && (this.value.length !== 10 || !isValidDate(this.value) || !validateDateByBusinessRule(this.value).isValid)) {
+				this.value = '';
+			}
+		});
+	}
+
+	function parseBrDate(dateString) {
+		var parts = dateString.split("/");
+		return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+	}
+
+	function formatBrDate(dateObj) {
+		var day = ('0' + dateObj.getDate()).slice(-2);
+		var month = ('0' + (dateObj.getMonth() + 1)).slice(-2);
+		return day + '/' + month + '/' + dateObj.getFullYear();
+	}
+
+	function validateDateByBusinessRule(dateString) {
+		if (!dateString || !isValidDate(dateString)) {
+			return { isValid: false, message: 'Por favor, informe uma data válida no formato dd/mm/aaaa.' };
+		}
+
+		var dateToValidate = parseBrDate(dateString);
+		var today = new Date();
+		today.setHours(0, 0, 0, 0);
+
+		var minAllowedDate = new Date(today.getTime());
+		minAllowedDate.setMonth(minAllowedDate.getMonth() - DATE_BUSINESS_RULES.minMonthsBeforeToday);
+
+		var maxAllowedDate = new Date(today.getTime());
+		maxAllowedDate.setFullYear(maxAllowedDate.getFullYear() + DATE_BUSINESS_RULES.maxYearsFromToday);
+
+		if (dateToValidate < minAllowedDate) {
+			return { isValid: false, message: 'Data inválida. O vencimento deve ser a partir de ' + formatBrDate(minAllowedDate) + '.' };
+		}
+
+		if (dateToValidate > maxAllowedDate) {
+			return { isValid: false, message: 'Data inválida. O vencimento deve ser até ' + formatBrDate(maxAllowedDate) + '.' };
+		}
+
+		return { isValid: true, message: '' };
+	}
+
+	function validateRecordsDateRange(records) {
+		for (var i = 0; i < records.length; i++) {
+			var reviewedDate = maskDateValue(records[i].datavencimentorevisada || '');
+			if (!reviewedDate) {
+				continue;
+			}
+			var dateValidation = validateDateByBusinessRule(reviewedDate);
+			if (!dateValidation.isValid) {
+				return 'Produto ' + (records[i].codigobarras || records[i].idproduto || '') + ': ' + dateValidation.message;
+			}
+		}
+		return '';
+	}
+
+		// Validates that the input string is a valid date formatted as "mm/dd/yyyy"
+	function isValidDate(dateString)
+	{
+	
+	    // Parse the date parts to integers
+	    var parts = dateString.split("/");
+	    var day = parseInt(parts[0], 10);
+	    var month = parseInt(parts[1], 10);
+	    var year = parseInt(parts[2], 10);
+	
+	    // Check the ranges of month and year
+	    if(year < 1000 || year > 3000 || month == 0 || month > 12)
+	        return false;
+	
+	    var monthLength = [ 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 ];
+	
+	    // Adjust for leap years
+	    if(year % 400 == 0 || (year % 100 != 0 && year % 4 == 0))
+	        monthLength[1] = 29;
+	
+	    // Check the range of the day
+	    return day > 0 && day <= monthLength[month - 1];
+	};
+
+    function dropDownRender(value, row, index, fieldName) {
+		return [
+		    \'<div class="dropdown">\',
+		      \'<button type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" class="btn btn-\' + (value ? \'success\' : \'info\') +  \' btn-lg btn-block dropdown-toggle">\',
+				value ? getText(row, fieldName, labels[fieldName]) : "Selecione uma opção...",
+			\'</button>\',
+			\'<ul class="dropdown-menu list-group"  style="width: 100%;"><li>\',
+				getDropDownList(index, fieldName, labels[fieldName]),
+			\'</li></ul>\',
+		    \'</div>\'
+		].join("");
+    }
+
+    function decimalRender(value, row, index, fieldName, dc) {
+		return value === null ? "-" : Number(value).format(dc);
+	};
+
+	function integerRender(value, row, index, fieldName) {
+		return value === null ? "-" : Number(value).format(0);
+	};
+
+	function getText(record, col, lab) {
+		for (var i in lab) {
+			if (lab[i].id == record[col]) {
+				return lab[i].text;
+			}
+		}
+		return "";
+	}
+
+    function getDropDownList(index, fieldName, list) {
+		var html = "";
+		for(var i in list) {
+			html += "<li class=\\"list-group-item\\" onclick=\\"setDropDown(" + [ index, "\'" + fieldName + "\'",  list[i].id].join() + ")\\\"><h4>" + list[i].text + "</h4></li>";
+		}
+		return html;
+    }
+
+	Number.prototype.format = function(c, d, t) {
+		var n = this, 
+		    c = isNaN(c = Math.abs(c)) ? 2 : c, 
+		    d = d == undefined ? "," : d, 
+		    t = t == undefined ? "." : t, 
+		    s = n < 0 ? "-" : "", 
+		    i = String(parseInt(n = Math.abs(Number(n) || 0).toFixed(c))), 
+		    j = (j = i.length) > 3 ? j % 3 : 0;
+		   return s + (j ? i.substr(0, j) + t : "") + i.substr(j).replace(/(\\d{3})(?=\\d)/g, "$1" + t) + (c ? d + Math.abs(n - i).toFixed(c).slice(2) : "");
+	};
+</script_content>
+
+	<script type="text/javascript">
+		/* Regras de negócio de data - ajustar aqui quando necessário */
+		var DATE_BUSINESS_RULES = {
+			minMonthsBeforeToday: 1,
+			maxYearsFromToday: 1
+		};
+
+		let idempresa = ~~~~; -> $v{idempresa};
+		let idwfatividade = ~~~~; -> $v{idwfatividade};
+		let idusuario = ~~~~; -> $v{idUsuario};
+		let key = idempresa + '.' + idwfatividade + '.' + idusuario;
+		let keyCols = idwfatividade + '.' + idusuario + '.cols';
+		
+		var idTarefa = ~~~; -> $v{idTarefa};
+		var $table;
+
+		var _idwfatividaderealizada = null;
+
+		var labels = {};
+		
+		$> sb.append('\t\tlabels.idwfatividaderealizada  = [\n').append(msgBuilder.sqlVarToJSON('sql_idwfatividaderealizada')).append('\n\t\t];');
+		$> sb.append('\t\tlabels.iddepartamento  = [\n').append(msgBuilder.sqlVarToJSON('sql_iddepartamento')).append('\n\t\t];');
+		
+		$> sb.append('\t\tvar wfatividade = ').append(msgBuilder.sqlVarToJSON('sql_wfatividade')).append(';\n');
+		
+		$> sb.append('\t\tvar data = [\n').append(msgBuilder.sqlVarToJSON('sql_filadetrabalho')).append('\n\t\t];');
+		
+		let columns = [
+			{ checkbox: true }
+		    ,{ field: "datainclusao", title: "Data Inclusão", align: "center", align: "middle", visible: false, sortable: true }
+		    ,{ field: "familia", title: "Família", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "grupo", title: "Grupo", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "setor", title: "Setor", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "departamento", title: "Departamento", align: "left", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "idproduto", title: "Cód. Produto", align: "right", valign: "middle", visible: false, sortable: true }
+		    ,{ field: "codigobarras", title: "EAN", align: "right", valign: "middle", visible: true, sortable: true, width: "13%" }
+		    ,{ field: "produto", title: "Produto", align: "left", valign: "middle", sortable: true, width: "50%" }
+			,{ field: "numeronf", title: "Nº NF", align: "right", valign: "middle", sortable: true, width: "10%" }
+		    ,{ field: "estoqueanterior", title: "Est. Anterior", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "estoqueanterior", 3)}
+			}
+		    ,{ field: "quantidaderecebida", title: "Qtd. Recebida", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "quantidaderecebida", 3)}
+			}
+		    ,{ field: "estoqueinicial", title: "Est. Inicial", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "estoqueinicial", 3)}
+			}
+		    ,{ field: "quantidadevendida", title: "Qtd. Vendida", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "quantidadevendida", 3)}
+			}
+		    ,{ field: "saldoestoquedataproxima", title: "Saldo Est. (Dt. Próx.)", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "saldoestoquedataproxima", 3)}
+			}
+		    ,{ field: "saldo", title: "Saldo Atualizado", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "saldo", 3)}
+			}
+		    ,{ field: "estoqueatual", title: "Est. Atual", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "estoqueatual", 3)}
+			}
+		    ,{ field: "estoquedias", title: "Est. Dias", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return integerRender(value, row, index,  "estoquedias")}
+			}
+		    ,{ field: "diasparavencimento", title: "Dias p/ Venc.", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return integerRender(value, row, index,  "diasparavencimento")}
+			}
+		    ,{ field: "valorprecovenda", title: "Preço Venda", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "valorprecovenda", 3)}
+			}
+		    ,{ field: "valorcustoaquisicao", title: "Custo Atual", align: "right", valign: "middle", sortable: true, width: "25%", visible: true,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "valorcustoaquisicao", 3)}
+			}
+		    ,{ field: "margempraticada", title: "Margem Praticada", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "margempraticada", 3)}
+			}
+			,{ field: "dataentrada", title: "Dt. Entrada", align: "middle", visible: true, sortable: true }
+			,{ field: "datavencimento", title: "Dt. Venc.", align: "middle", visible: true, sortable: true }
+			,{ field: "dataultimavenda", title: "Dt. Últ. Venda", align: "middle", visible: true, sortable: true }
+		    ,{ field: "valorprecovendaanterior", title: "Preço Venda Anterior", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "valorprecovendaanterior", 3)}
+			}
+			,{ field: "qtdrevisada", title: "Qtd. Revisada", align: "right", valign: "middle", clickToSelect: false, sortable: true, width: "10%", visible: false,
+				formatter: function(value, row, index) { return numberRender(value, row, index, "qtdrevisada")}
+		    }
+			,{ field: "datavencimentorevisada", title: "Dt. Venc. Revisada", align: "right", valign: "middle", clickToSelect: false, sortable: true, width: "10%", visible: false,
+				formatter: function(value, row, index) { return calendarRender(value, row, index, "datavencimentorevisada")}
+		    }
+			
+		    ,{ field: "qtdvendidoaposconferencia", title: "Qtd. Vendido Após Conf.", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "qtdvendidoaposconferencia", 3)}
+			}
+		    ,{ field: "qtdvendidoontem", title: "Qtd. Vendido Ontem", align: "right", valign: "middle", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return decimalRender(value, row, index,  "qtdvendidoontem", 3)}
+			}
+			,{ field: "observacaoanterior", title: "Obs. Anterior", align: "left", valign: "middle", sortable: true, width: "50%", visible: false }
+		    ,{ field: "observacao", title: "Observação", align: "left", valign: "left", sortable: true, width: "25%", visible: false,
+				formatter: function(value, row, index) {  return textRender(value, row, index,  "observacao")}
+			}
+			,{ field: "idwfatividaderealizada", title: "Resultado", align: "center", valign: "middle", clickToSelect: false, sortable: true,
+				formatter: function(value, row, index) {
+					if (value) {
+						doSaveTemp();
+					}
+					return dropDownRender(value, row, index, "idwfatividaderealizada")
+				}
+		    }
+	    ];
+		
+		let tempDataCols = JSON.parse(localStorage.getItem(keyCols));
+		if (tempDataCols) {
+			for (let i = 0; i<tempDataCols.length;i++) {
+				columns[i].visible = tempDataCols[i].visible;
+			}
+		}
+		$(document).ready(function() {
+			$("#datavencimento").datepicker({ 
+				dateFormat: "dd/mm/yy"
+			});
+			bindDateMask($("#datavencimento"));
+
+			$.extend($.fn.bootstrapTable.defaults, $.fn.bootstrapTable.locales["pt-BR"]);
+			
+			$table = $("#data-table");
+			$table.bootstrapTable({
+					data: data,
+				    /*height: 850,*/
+				    toolbar: "#custom-toolbar",
+				    striped: true,
+				    pagination: true,
+				    pageSize: 10,
+				    pageList: [10, 20, 30, 60, 100, 200],
+				    search: true,
+				    showColumns: true,
+				    showRefresh: false,
+				    showToggle: false,
+				    minimumCountColumns: 2,
+				    clickToSelect: true,
+					locale: "pt-BR",
+				    columns: columns,
+				    onPostBody: function () {
+				    	$table.find(".render").load();
+				    }
+				});
+				
+				$table.on(' column-switch.bs.table', function (field, checked) {
+					let data = $table.bootstrapTable('getOptions').columns;
+					localStorage.setItem(keyCols, JSON.stringify(data));
+				});
+				
+				$(window).resize(function() {
+					$table.bootstrapTable("resetView");
+				});
+				
+				$(".keep-open > button").addClass("btn-lg");
+				$(".search > input").addClass("input-lg");
+				
+				var $customToolbar = $("#custom-toolbar");
+				
+				$customToolbar.find(".title").html(wfatividade.descricao);
+				
+				$('.includeLoader').show();
+				syncData().then(r => {
+					$('.includeLoader').hide();
+					
+					let tempData = localStorage.getItem(key);
+					if (tempData) {
+						$("#sync-modal").modal('show');
+					}
+				});
+		});
+
+$>	sb.append(funcs());
+	</script>
+
+</html>

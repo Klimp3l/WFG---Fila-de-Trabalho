@@ -1,8 +1,10 @@
-# versao 1.0
+# versao 1.2
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
 # | 04/05/2022 | Bernardo    | 		       | 	 	     | Criação.
+# | 06/08/2026 | Bernardo    | 		       | 	 	     | Incluídas colunas padrão da conferência de vencimento.
+# | 06/08/2026 | Bernardo    | 		       | 	 	     | Busca o tipo de situação da atividade no envio.
 
 <script_function name="getAtividades">
 	~write_exec_log;
@@ -149,6 +151,11 @@
 				'classificacao', wb.valores->>'classificacao',
 				'qtdeabastecimento', wb.valores->>'qtdeabastecimento',
 				'qtdeabastecer', wb.valores->>'ruptura',
+				'saldoestoquedataproxima', wb.valores->>'saldoestoquedataproxima',
+				'diasparavencimento', wb.valores->>'diasparavencimento',
+				'qtdrevisada', wb.valores->>'qtdrevisada',
+				'datavencimentorevisada', (wb.valores->>'datavencimentorevisada')::varchar,
+				'qtdvendidoaposconferencia', wb.valores->>'qtdvendidoaposconferencia',
 				'estoquequantidade', wb.valores->>'estoquequantidade',
 				'qtdultinventario', wb.valores->>'qtdultinventario',
 				'qtdproducaobandeja', wb.valores->>'qtdproducaobandeja',
@@ -199,11 +206,15 @@
 				'label', 'Datas',
 				'icon', 'fa-solid fa-calendar-days',
 				'itens', json_build_array(
+					json_build_object('key', 'datainclusao', 'label', 'Data Inclusão', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-plus', 'defaultVisible', true),
 					json_build_object('key', 'diassemvenda', 'label', 'Dias sem venda', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
 					json_build_object('key', 'diasentrada', 'label', 'Dias entrada', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
 					json_build_object('key', 'dataultimavenda', 'label', 'Data última venda', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
 					json_build_object('key', 'dataultimaentrada', 'label', 'Data última entrada', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-day'),
-					json_build_object('key', 'datavalidade', 'label', 'Data validade', 'type', 'input', 'inputType', 'date', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark')
+					json_build_object('key', 'datavalidade', 'label', 'Data validade', 'type', 'input', 'inputType', 'date', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark'),
+					json_build_object('key', 'datavencimento', 'label', 'Dt. Venc.', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark', 'defaultVisible', true),
+					json_build_object('key', 'diasparavencimento', 'label', 'Dias p/ Venc.', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days', 'defaultVisible', true),
+					json_build_object('key', 'datavencimentorevisada', 'label', 'Dt. Venc. Revisada', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-check', 'defaultVisible', true)
 				)
 			),
 			json_build_object(
@@ -224,14 +235,17 @@
 					json_build_object('key', 'qtdproducaobandeja', 'label', 'Quantidade produção bandeja', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set'),
 					json_build_object('key', 'capacidade', 'label', 'Capacidade', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-cubes'),
 					json_build_object('key', 'qtdunentrada', 'label', 'Quantidade unidade entrada', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dolly'),
-					json_build_object('key', 'qtdproduzido', 'label', 'Quantidade produzido', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set')
+					json_build_object('key', 'qtdproduzido', 'label', 'Quantidade produzido', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set'),
+					json_build_object('key', 'qtdrevisada', 'label', 'Qtd. Revisada', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-clipboard-check', 'defaultVisible', true),
+					json_build_object('key', 'qtdvendidoaposconferencia', 'label', 'Qtd. Vendido Após Conf.', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-cart-shopping', 'defaultVisible', true)
 				)
 			),
 			json_build_object(
 				'label', 'Estoque',
 				'icon', 'fa-solid fa-boxes-stacked',
 				'itens', json_build_array(
-					json_build_object('key', 'qtdestoqueatual', 'label', 'Estoque atual', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked', 'defaultVisible', true),
+					json_build_object('key', 'qtdestoqueatual', 'label', 'Est. Atual', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked', 'defaultVisible', true),
+					json_build_object('key', 'saldoestoquedataproxima', 'label', 'Saldo Est. (Dt. Próx.)', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked', 'defaultVisible', true),
 					json_build_object('key', 'estoquequantidade', 'label', 'Estoque quantidade', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked'),
 					json_build_object('key', 'percentualabastecimento', 'label', 'Percentual abastecimento', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-percent'),
 					json_build_object('key', 'qtdeabastecer', 'label', 'Quantidade abastecer', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-box-open'),
@@ -321,11 +335,36 @@
 				.setString(horaAtual);
 				
 		String response = '';
+		Map<Integer, String> tiposSituacaoPorAtividade = new HashMap<>();
 
 		for (obj in atividade.encaminhamentos) {
 			if (obj.idwfatividadeencaminhamento) {
+				Integer idWFAtividadeRealizada = (obj.idwfatividadeencaminhamento as Number).intValue();
 
-				if (obj.tiposituacao.equals('F')) {
+				if (!tiposSituacaoPorAtividade.containsKey(idWFAtividadeRealizada)) {
+					def statement = execScript.getConnection().prepareStatement('''
+						select tiposituacao
+						from wfatividaderealizada
+						where idwfatividaderealizada = ?
+					''');
+					def resultSet = null;
+
+					try {
+						statement.setInt(1, idWFAtividadeRealizada);
+						resultSet = statement.executeQuery();
+						tiposSituacaoPorAtividade.put(
+							idWFAtividadeRealizada,
+							resultSet.next() ? resultSet.getString('tiposituacao') : ''
+						);
+					} finally {
+						if (resultSet != null) {
+							resultSet.close();
+						}
+						statement.close();
+					}
+				}
+
+				if ('F'.equals(tiposSituacaoPorAtividade.get(idWFAtividadeRealizada))) {
 					hasAtividadeFinalizacao = true;
 					idWFFilatrabalhoFinalizacao.append(obj.idwffilatrabalho).append(',');
 				}

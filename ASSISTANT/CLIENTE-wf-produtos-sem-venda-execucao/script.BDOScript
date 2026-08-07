@@ -28,6 +28,9 @@ With
 		/* Monitoramento */
 		Select 'HEAVEN-wf-produtos-sem-venda-monitoramento-alteracao-comercial' apelido Union all 
 
+		/* Transfere apontamentos de Verificação Comercial para a fila configurada */
+		Select 'CLIENTE-wf-produtos-sem-venda-pos-verificacao-comercial' apelido Union all
+
 		/* Gera relatórios */
 		Select 'HEAVEN-wf-produtos-sem-venda-relatorio-auditoria' apelido Union all 
 		--Select 'HEAVEN-wf-produtos-sem-venda-relatorio-comercial' apelido Union all 
