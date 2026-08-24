@@ -1,0 +1,579 @@
+# versao 2.1
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 07/02/2019 | Giovani     | Anderson    | 16359       | Criação.
+# | 20/02/2019 | Giovani     | Anderson    | 16488       | Diversos ajustes.
+# | 25/02/2019 | Giovani     | Anderson    | 16534       | Adicionado regra p/ casos onde tem duas entradas do mesmo produto na mesma loja, somar o estoque anterior com a qtd recebida da entrada anterior.
+# | 11/03/2019 | Giovani     | Stephanie   | 16650       | Alterado forma de buscar o estoque anterior, agora busca o saldo do dia e subtraí as entradas desse mesmo dia.
+# |            |             |             | 16650       | Adicionado o balanço p/ ser considerado em saídas.
+# | 13/05/2022 | André		 | Elcio	   | 27060		 | Pelo que pude notar, as partes mais demoradas são em relação a fazer o distinct entre os sqqls, então a minha ideia foi separar igual estava no With do sqql original e inserir em tabela temporária, sem o distinct e depois inserir em uma nova tabela temporária fazendo o distinct. Enfim, deixando o result pronto para realizar o distinct diretamente na tabela e inserir na tbItensVencimento depois.
+# | 31/05/2022 | André/Elcio | Elcio	   | 			 | Faz o filtro de saldo de estoque já no primeiro sql, para facilitar o processamento.
+# | 25/07/2022 | André		 | Elcio	   | 27873		 | Alterado a forma de buscar as entradas com vencimentos próximos para With e empresa Matriz. Cliente diminuiu as metas para ficar mais rápido também. Criado log na tabela tbItensVencimento para validação dos valores de venda e inventário, para não ficar buscando toda vez a venda retroativa, apenas as novas. E criado deeelete para excluir itens com saldo de estoque próximo negativos.
+# | 03/06/2022 | Elcio       | Anderson    | 33346		 | Implementado regra de prioridade de busca de meta 37 sobre a 20 .   and x.datavencimento <= current_date + (Case when coalesce(mms.valor::int,0) > 0 then coalesce(mms.valor::int,0) else coalesce(mm.valor::int,10) end)
+# | 14/06/2024 | Elcio       | Anderson    | 33446		 | Carregar vendas dos produtos filhos. 
+# | 09/08/2024 | Elcio       | Anderson    | 33638		 | Meta 37
+# | 17/10/2024 | Gabriel     | Anderson    | 34468		 | Alterado para buscar apenas categoria 'VEN' na quantidadevendidaatual.
+# | 30/10/2024 | Gabriel     | Anderson    | 34117		 | Alterado duas formulas, quantidade vendida para buscar desde a entrada da nota até o dia anterior e adicionar vendas de produto filhos, segunda formula alterada foi adicionado no saldodataproxima, a quebra de balanço 
+# | 19/11/2024 | Gabriel     | Eudione     | 34627		 | Adicionado filtros de departamentos e setores buscando direto do hipcom.
+# | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Incluída a data de vencimento na chave para preservar múltiplas validades do produto.
+
+write_exec_log; 
+
+set dataAnalise = '$exp{addDays($v{dataAtual},-1)}exp';
+
+#####################################################
+# Filtros Departamentos e Setores a serem ignorados #
+############################################################################
+# Busca direto do HIPCOM os setores onde a flag depdtvaliobrig é igual a 'N'
+# Foi solicitado isso no chamado 34627, para o cliente poder controlar no ERP
+###########################################################################
+
+connect $v{datasource1};
+
+sql
+Select  
+	group_concat( distinct cast(concat((s.depdepto+1000),substring((s.depsecao+100),2,2)) as decimal)) as departamentosignorar
+From 
+	hipdep s
+Where 
+	depdtvaliobrig = 'N'
+sql_var(sql_setores_ignorar) sql_props(lower_labels);
+
+sql
+Select  
+	group_concat( distinct depdepto + 1000) as setoresignorar
+From 
+	hipdep
+Where 
+	depdtvaliobrig = 'N'
+sql_var(sql_departamento_ignorar) sql_props(lower_labels);
+
+set filtroDepartamentosIgnorar = '$c{departamentosignorar#}'.equals('') ? '' : ' and p.iddepartamento not in ($c{departamentosignorar})';
+
+set filtroSetoresIgnorar = '$c{setoresignorar#}'.equals('') ? '' : ' and p.idsetor not in ($c{setoresignorar})';
+
+###############################################################################
+
+connect $v{ds_bridge};
+
+$include{HEAVEN-script-sql-busca-config-tarefa,"'$v{apelido}'"}include
+
+set ignorasetor = '$c{HEAVEN-cfg-ignorar-setor#0}';
+
+set filtroignorasetor = '$v{ignorasetor#0}'.equals('0') ? '' : ' and p.idsetor not in ($v{ignorasetor#0})';
+
+########################################################################################################
+# Cria tabela temporária para armazenar os resultados de entradas e melhorar o processamento da tarefa #
+########################################################################################################
+
+set idTarefaExecucao			= execScript.getIdTarefaExecucao();
+set tempTableEntrada			= 'temp_ent_$v{idTarefa}_$v{idTarefaExecucao}';
+set tempTableEntradaDistinct	= 'temp_dist_$v{idTarefa}_$v{idTarefaExecucao}';
+set tempTableEntradaDias		= 'temp_dias_$v{idTarefa}_$v{idTarefaExecucao}';
+set tempTableResult				= 'temp_res_$v{idTarefa}_$v{idTarefaExecucao}';
+
+##################################################
+# Análise André vide chamado 27060 em 13/05/2022 #
+##################################################
+# Pelo que pude notar, as partes mais demoradas são em relação a fazer o distinct 
+# entre os sqqls, então a minha ideia foi separar igual estava no With do sqql original
+# e inserir em tabela temporária, sem o distinct e depois inserir em uma nova tabela temporária
+# fazendo o distinct.
+# Enfim, deixando o result pronto para realizar o distinct diretamente na tabela e inserir na 
+# tbItensVencimento depois.
+##################################################
+
+
+# Busca maior configuração de dias Departamentos. 
+sql 
+Select 
+	max(valor) as maxdiasconfigurado
+From  
+	metamercadologico mm
+Where 
+	mm.idmeta = 20 and current_date between mm.datainicial and mm.datafinal 
+	and mm.idempresa = $v{HEAVEN-vs-idempresa-Matriz}
+;
+
+
+begin_transaction ;	
+
+	############
+	# Entradas #
+	############
+	# 2 min / 82mil registros
+
+#	sql_exec drop table tempelcio0;
+#	set tempTableEntrada = 'tempelcio0';
+
+	sql_exec create temporary table $v{tempTableEntrada} as 
+		Select     /* $v{apelido} 2222 | $v{execId}  */
+			e.numeronf
+			,e.idempresa
+			,eiv.idproduto
+			,eiv.datavencimento
+			,ei.datamovimento
+			,ei.quantidade
+			,e.idpessoa as idfornecedor
+			/* SALDO ESTOQUE */
+			,(	Select sum(esa.quantidade)
+				From	estoquesaldoatual esa
+				Where	esa.idempresa = ei.idempresa
+						and esa.idproduto = ei.idproduto
+			) as estoqueatual
+		From
+			entrada e
+			inner join entradaitens ei on (ei.idempresa = e.idempresa and ei.identrada = e.identrada and ei.datamovimento = e.datamovimento)
+			inner join entradaitemvcto eiv on (eiv.idempresa = ei.idempresa and eiv.identrada = ei.identrada and eiv.idproduto = ei.idproduto)
+			inner join produto p on (p.idproduto = ei.idproduto)
+			left join metamercadologico mm on (mm.idmeta = 20 /* Meta por Departamento */ and current_date between mm.datainicial and mm.datafinal and mm.idmercadologico = cast(p.iddepartamento as varchar(16)) and mm.idempresa = $v{HEAVEN-vs-idempresa-Matriz} and coalesce(mm.valor,0) > 0)
+			left join metamercadologico mmsetor on (mmsetor.idmeta = 37 /* Meta por SETOR */   and current_date between mmsetor.datainicial and mmsetor.datafinal and mmsetor.idmercadologico = cast(p.idsetor as varchar(16)) and mmsetor.idempresa = $v{HEAVEN-vs-idempresa-Matriz} and coalesce(mmsetor.valor,0) > 0)
+		Where
+			1 = 1
+			$v{filtroignorasetor}
+			$v{filtroDepartamentosIgnorar}
+			$v{filtroSetoresIgnorar}
+			and eiv.datavencimento between current_date - 1 and current_date + COALESCE(coalesce(mmsetor.valor::int,mm.valor::int),10)      
+			--and eiv.datavencimento between current_date - 1 and current_date + 200 -- COALESCE(coalesce(mmsetor.valor::int,mm.valor::int),10)      
+		--	AND eiv.idproduto = 57685
+		--	and eiv.idempresa = 5
+			--erro > 0 
+	;
+ 
+	#######################
+	# Entradas - Distinct #
+	#######################
+	# 1 segundo / 82mil registros
+
+#	sql_exec drop table tempelcio;
+#	set tempTableEntradaDistinct = 'tempelcio';
+
+	sql_exec create temporary table $v{tempTableEntradaDistinct} as 
+		Select distinct
+			x.*
+		From
+			$v{tempTableEntrada} x
+	;
+
+	#sql_exec create index $v{tempTableEntradaDistinct}_idx_idempresa_idproduto_datamovimento          on $v{tempTableEntradaDistinct} (idempresa, idproduto, datamovimento);
+	sql_exec create index $v{tempTableEntradaDistinct}_idx_idempresa_idproduto_datamovimento_numeronf on $v{tempTableEntradaDistinct} (idempresa, idproduto, datamovimento, numeronf);
+
+
+	##############################
+	# Entradas - Distinct - Dias #
+	##############################
+	# 20 segundos / 4mil registros
+
+	#sql_exec drop table tmpelciodias;
+	#set tempTableEntradaDias = 'tmpelciodias';
+
+	
+	sql_exec create temporary table $v{tempTableEntradaDias} as 
+		Select
+			wpa.idempresa
+			,wpa.idproduto
+			,wpa.datamovimento
+			,e.numeronf
+			,ei.quantidade
+			,row_number() over(partition by wpa.idempresa, wpa.idproduto, wpa.datamovimento order by e.numeronf) as rn
+		From
+			$v{tempTableEntradaDistinct} wpa
+			inner join entrada e on (e.idempresa = wpa.idempresa and e.datamovimento = wpa.datamovimento and e.numeronf <> wpa.numeronf)
+			inner join entradaitens ei on (ei.idempresa = e.idempresa and ei.identrada = e.identrada and ei.datamovimento = e.datamovimento and ei.idproduto = wpa.idproduto)
+	;
+
+	#sql_exec create index $v{tempTableEntradaDias}_idx_idempresa_idproduto_datamovimento on $v{tempTableEntradaDias}          (idempresa, idproduto, datamovimento);
+	sql_exec create index $v{tempTableEntradaDias}_idx_idempresa_idproduto_datamovimento_numeronf on $v{tempTableEntradaDias} (idempresa, idproduto, datamovimento, numeronf);
+
+Commit;
+
+	##########
+	# Result #
+	##########
+	# 1 hora e meia / 82mil registros
+
+	
+	sql_exec create table $v{tempTableResult} as 
+		With
+			wbase as (
+				Select
+					wpa.idempresa
+					,wpa.idfornecedor
+					,wpa.idproduto
+					,wpa.numeronf
+					,wpa.datamovimento
+					,wpa.datavencimento
+					,wpa.quantidade as quantidaderecebida
+		
+					/* ESTOQUE DIA */
+					,(Case   /* Verifica se teve mais de uma Nota do Produto e empresa no mesmo dia */
+						when wed.rn > 1 then (
+							Select	sum(wed2.quantidade)
+							From	$v{tempTableEntradaDias} wed2
+							Where	wed2.idempresa = wpa.idempresa
+									and wed2.idproduto = wpa.idproduto
+									and wed2.datamovimento = wpa.datamovimento
+									and wed2.rn < wed.rn
+						)
+						else 0
+					end) +
+						coalesce(
+							coalesce(( /* Busca Saldo de EStoque considerando já a entrada atual */
+								Select	ed.quantidade
+								From	estoquedia ed
+								Where	ed.idempresa = wpa.idempresa
+										and ed.idproduto = wpa.idproduto
+										and ed.datamovimento <= wpa.datamovimento
+								order by ed.datamovimento desc limit 1
+							),0) - 
+							coalesce((    /* Subtrai a entrada para saber a quantidade anterior */
+								Select	sum(wed2.quantidade)
+								From	$v{tempTableEntradaDias} wed2
+								Where	wed2.idempresa = wpa.idempresa
+										and wed2.idproduto = wpa.idproduto
+										and wed2.datamovimento = wpa.datamovimento
+							),wpa.quantidade)
+						,0.) as estoqueanterior
+		
+					/* VENDAS */
+					,coalesce((
+					    Select 
+					        sum(mr.quantidade)
+					    From 
+					        movimentoresumo mr
+					        inner join tipooperacao op on (op.idtipooperacao = mr.idtipooperacao)
+					    Where 
+					        op.tipo = 'S'
+					        and mr.idempresa = wpa.idempresa
+					        and mr.idproduto in (Select prd.idprodutofilho From producao prd where prd.idprodutopai = wpa.idproduto Union Select wpa.idproduto)
+					        and mr.datamovimento between wpa.datamovimento + 1 and current_date - 1
+					        and op.idtipooperacao not in (1002) /* #! Quebras originadas por trocas */
+					), 0) as quantidadevendidaatual
+					/* # Como o resultado final soma o inventário, subtraí aqui para validar os valores # */
+					,coalesce(tviv.logquantidadevendidatotal, 0) - coalesce(tviv.loginventarioestoque, 0) as logquantidadevendidatotal
+					,coalesce((
+						Select	abs(sum(iei.quantidadecontada - iei.quantidadeestoque))
+						From	inventarioestoque ie
+								inner join inventarioestoqueitem iei on (iei.idinventario = ie.idinventario)
+						Where	ie.idempresa = wpa.idempresa
+								and iei.idproduto = wpa.idproduto
+								and ie.datainventario between wpa.datamovimento+1 and current_date -1
+						Having	sum(iei.quantidadecontada - iei.quantidadeestoque) < 0
+					), 0.) as inventarioestoque
+					,coalesce(tviv.loginventarioestoque, 0) as loginventarioestoque
+					,tviv.logdataultimoprocessamentovenda as logdataultimoprocessamentovenda
+					,tviv.datainclusao as datainclusao
+		
+					/* SALDO ESTOQUE */
+					,wpa.estoqueatual as estoqueatual
+
+					/* Balanco */
+					,coalesce(
+					    (
+					        Select 
+					            sum(iei.quantidadecontada - iei.quantidadeestoque) as qtdeliquida
+					        From 
+					            inventarioestoqueitem iei
+					            inner join inventarioestoque ie on (ie.idinventario = iei.idinventario)
+					        Where 
+					            iei.idproduto = wpa.idproduto
+					            and ie.idempresa = wpa.idempresa
+					            and ie.dataencerramento between wpa.datamovimento and current_date - 1
+					    )
+					, 0) as quebrabalanco
+				From
+					$v{tempTableEntradaDistinct} wpa
+					left join $v{tempTableEntradaDias} wed on (wed.idempresa = wpa.idempresa and wed.idproduto = wpa.idproduto and wed.datamovimento = wpa.datamovimento and wed.numeronf = wpa.numeronf)
+					left join tbItensVencimento tviv on (
+						tviv.idempresa = wpa.idempresa
+						and tviv.idfornecedor = wpa.idfornecedor
+						and tviv.idproduto = wpa.idproduto
+						and tviv.numeronf = wpa.numeronf
+					)
+			/* Final: wbase */
+			)
+		Select
+			x.idempresa
+			,x.idfornecedor
+			,x.idproduto
+			,x.numeronf
+			,cast(x.estoqueanterior as numeric(15,3)) as estoqueanterior
+			,cast(x.quantidaderecebida as numeric(15,3)) as quantidaderecebida
+			,cast(x.quantidaderecebida + x.estoqueanterior as numeric(15,3)) as estoqueinicial
+			
+			,cast(x.quantidadevendida as numeric(15,3)) as quantidadevendida
+
+			,cast(
+			    coalesce(x.quantidaderecebida, 0) 
+			    + coalesce(x.estoqueanterior, 0) 
+			    - coalesce(x.quantidadevendida, 0) 
+			    + coalesce(x.quebrabalanco, 0) 
+			    as numeric(15,3)
+			) as saldoestoquedataproxima
+			,cast(x.estoqueatual as numeric(15,3)) as estoqueatual
+			,round((Case
+				when coalesce(g.girodiareal,0.) = 0. then 0
+				else ((x.quantidaderecebida + x.estoqueanterior) - x.quantidadevendida) / g.girodiareal
+			end)) as estoquedias
+			,x.datavencimento - current_date as diasparavencimento
+			,cast((Case when coalesce(ppc.valorprecopromocao,0.) = 0. then ppc.valorprecovenda else ppc.valorprecopromocao end) as numeric(15,2)) as valorprecovenda
+			,cast(ppc.valorcustoaquisicao as numeric(15,2)) as valorcustoaquisicao
+			,cast((Case
+				when coalesce(ppc.valorprecovenda,0.) = 0. then 0.
+				else  1-(ppc.valorcustoaquisicao / ppc.valorprecovenda)
+			end) * 100 as numeric(15,2)) as margempraticada
+			,x.datamovimento
+			,x.datavencimento
+			,pr.dataultimavenda
+			,coalesce(x.datainclusao, current_date) as datainclusao
+			,(Case	when x.quantidadevendida <> x.logquantidadevendidatotal then current_date
+					else coalesce(x.logdataultimoprocessamentovenda, current_date)
+			end) as logdataultimoprocessamentovenda
+			,x.quantidadevendida as logquantidadevendidatotal
+			,x.inventarioestoque as loginventarioestoque
+		From
+			(
+				Select
+					wb.idempresa
+					,wb.idfornecedor
+					,wb.idproduto
+					,wb.numeronf
+					,wb.datamovimento
+					,wb.datavencimento
+					,wb.quantidaderecebida
+					,wb.estoqueanterior
+					,wb.quantidadevendidaatual /* # "vendeu 10 ontem" # */as quantidadevendida /* # Resultado: 10 + 315 + 200 = 425 # */
+					,wb.logquantidadevendidatotal
+					,wb.inventarioestoque
+					,wb.loginventarioestoque
+					,wb.logdataultimoprocessamentovenda
+					,wb.datainclusao
+					,wb.estoqueatual
+					,wb.quebrabalanco
+				From
+					wbase wb
+			) x
+			left join produtoresumo pr on (pr.idempresa = x.idempresa and pr.idproduto = x.idproduto)
+			left join produtogiro g on (g.idempresa = x.idempresa and g.idproduto = x.idproduto and tipogiro = 'V' and dias = 90)
+			left join produtoprecocusto ppc on (ppc.idempresa = x.idempresa and ppc.idproduto = x.idproduto)
+	;
+
+commit ;
+
+#####################
+# Result - Distinct #
+#####################
+
+sql 
+Select distinct
+	*
+From
+	$v{tempTableResult} x
+Where
+	(
+		/* # Vide chamado 27873, não conseidara caso não tenha saldoestoquedataproxima (APENAS REGISTROS COM DATA DE INCLUSÃO HOJE) # */
+		/* # Para não fica excluíndo e inserindo o mesmo registro toda hora no banco. # */
+		/* # Necessário fazer isso, pois "hoje" o produto tem "100" de estoque próximo, mas "amanhã" ele tem "-20". Ou seja, vai ser gerenciado os produtos com base neste campo e lá embaixo faz o deeeelete # */
+		x.datainclusao <> current_date
+		or (
+		 	x.datainclusao = current_date
+			and x.saldoestoquedataproxima > 0
+		)
+	)
+sql_var(memoriaItensVencimento) no_exec;
+
+
+
+begin_transaction;
+
+	sql_exec CREATE TABLE IF NOT EXISTS tbItensVencimento (
+		idempresa integer,
+		idfornecedor varchar(55),
+		idproduto integer,
+		numeronf bigint,
+		estoqueanterior numeric(15,3),
+		quantidaderecebida numeric(15,3),
+		estoqueinicial numeric(15,3),
+		quantidadevendida numeric(15,3),
+		saldoestoquedataproxima numeric(15,3),
+		estoqueatual numeric(15,3),
+		estoquedias numeric(15,3),
+		diasparavencimento numeric(15,3),
+		valorprecovenda numeric(15,3),
+		valorcustoaquisicao numeric(15,3),
+		margempraticada numeric(15,3),
+		datamovimento date,
+		datavencimento date,
+		dataultimavenda date,
+		datainclusao date,
+		PRIMARY KEY (idempresa, idfornecedor, idproduto, numeronf, datavencimento)
+	);
+
+	# Utilizado para saber quando a quantidade de venda foi alterada, para fica dinâmico a busca das vendas #
+	sql_exec alter table tbItensVencimento add column if not exists logdataultimoprocessamentovenda date;
+	sql_exec alter table tbItensVencimento add column if not exists logquantidadevendidatotal numeric(15,3);
+	sql_exec alter table tbItensVencimento add column if not exists loginventarioestoque numeric(15,3);
+
+	sql_exec CREATE INDEX IF NOT EXISTS tbItensVencimento_idx_datamovimento ON tbItensVencimento (datamovimento);
+	sql_exec CREATE INDEX IF NOT EXISTS tbItensVencimento_idx_datavencimento ON tbItensVencimento (datavencimento);
+
+	sql_sync memoriaItensVencimento into tbItensVencimento
+		(idempresa
+		,idfornecedor
+		,idproduto
+		,numeronf
+		,estoqueanterior
+		,quantidaderecebida
+		,estoqueinicial
+		,quantidadevendida
+		,saldoestoquedataproxima
+		,estoqueatual
+		,estoquedias
+		,diasparavencimento
+		,valorprecovenda
+		,valorcustoaquisicao
+		,margempraticada
+		,datamovimento
+		,datavencimento
+		,dataultimavenda
+		,datainclusao
+		,logdataultimoprocessamentovenda
+		,logquantidadevendidatotal
+		,loginventarioestoque)
+		(idempresa=idempresa
+		,idfornecedor=idfornecedor
+		,idproduto=idproduto
+		,numeronf=numeronf
+		,datavencimento=datavencimento)
+	update_only_when_needed_by_if
+	;
+
+
+	#-- ElcioExcluir
+#sql select * from tbItensVencimento,ERRO
+
+	# Vide chamado 27873 excluí o que tiver saldo negativo. #
+	sql_exec delete from tbItensVencimento where saldoestoquedataproxima <= 0 and datainclusao < current_date - 30;
+
+commit;
+
+# FOR EACH.
+sql 
+With
+	colaborador as (
+		Select	c.idcolaborador, c.nome colaborador, c.email, fc.idfuncao, fc.descricao funcao, cf.idempresa
+		From	colaborador c
+				inner join colaboradorfuncao cf on (cf.idcolaborador = c.idcolaborador)
+				inner join funcaocolaborador fc on (fc.idfuncao = cf.idfuncao)
+				inner join empresa e on (e.idempresa = cf.idempresa)
+		Where	c. situacao = 'A'
+				and e.situacao = 'A'
+				and c.email like '%@%'
+				and cf.idempresa in ($v{empresas})
+	)
+Select
+	x.idempresas as idempresas
+	,string_agg(distinct x.email,'|') as email
+	,'Empresas: '||x.idempresas||', Funções: '||string_agg(distinct x.funcao,',')||', Colaborador: '||string_agg(distinct x.colaborador,',') as id
+	,0 as tipo
+From (
+	Select
+		c.colaborador
+		,c.email
+		,c.funcao
+		,string_agg(distinct c.idempresa, ',' order by c.idempresa desc) as idempresas
+	From (
+		Select distinct cast(c.idempresa as varchar(16)) as idempresa, c.colaborador, c.email, c.funcao||' - '||c.idfuncao as funcao From colaborador c Where idfuncao in ($c{cfg-idFuncaoRecebeEmpresa#0})
+			Union all
+		Select distinct '*' as idempresa, c.colaborador, c.email, c.funcao||' - '||c.idfuncao as funcao From colaborador c Where idfuncao in ($c{cfg-idFuncaoRecebeGeral#0})
+	) c
+	Group by
+		c.colaborador
+		,c.email
+		,c.funcao
+) x
+Group by
+	x.idempresas
+sql_var(sql_for_each) sql_props(lower_labels);
+
+for_each_dest <columnDest>email</columnDest>
+	<columnDestType>tipo</columnDestType>
+	<columnId>id</columnId>
+	<sqlVar>sql_for_each</sqlVar>;
+
+connect $v{ds_bridge};
+
+set filtroEmpresa = '$v{idempresas#*}'.contains('*') ? '' : ' and e.idempresa in ($v{idempresas}) ';
+set tituloEmpresa = '$v{idempresas#*}'.contains('*') ? 'Empresas: Todas' : 'Empresas: $v{idempresas} ';
+set titulo = '$v{idTarefa} - $v{descTarefa}';
+set tituloFiltro = 'Filtros: Dia: $v{dataAnalise"date:dd/MM/yyyy"}, $v{tituloEmpresa}';
+
+sql 
+Select
+	e.apelido as empresa
+	,d.descricao||' - '||d.iddepartamento as departamento
+	,s.descricao||' - '||s.idsetor as setor
+	,f.razaosocial||' - '||substring(f.idpessoa,3) as fornecedor
+	,x.numeronf
+	,p.idproduto
+	,p.codigobarras
+	,p.descricao
+	,x.estoqueanterior
+	,x.quantidaderecebida
+	,x.estoqueinicial
+	,x.quantidadevendida
+	,x.saldoestoquedataproxima
+	,x.estoqueatual
+	,x.estoquedias
+	,x.diasparavencimento
+	,x.valorprecovenda
+	,x.valorcustoaquisicao
+	,x.margempraticada
+	,x.datamovimento
+	,x.datavencimento
+	,x.dataultimavenda
+From
+	tbItensVencimento x
+	inner join empresa e on (e.idempresa = x.idempresa)
+	inner join produto p on (p.idproduto = x.idproduto)
+	inner join pessoa f on (f.idpessoa = x.idfornecedor)
+	left join departamento d on (d.iddepartamento = p.iddepartamento)
+	left join setor s on (s.idsetor = p.idsetor)
+	/* Ideia de buscar 2 metas 20 e 37, é em função de usar prioritariamente a meta 37 por Setor sobre Departamento, isso se localizar lcto para a meta 37. Mantis: 33346 */
+	left join metamercadologico mm on (mm.idmeta = 20 and current_date between mm.datainicial and mm.datafinal and mm.idmercadologico = cast(p.iddepartamento as varchar(16)) and mm.idempresa = x.idempresa)
+	left join metamercadologico mms on (mms.idmeta = 37 and current_date between mms.datainicial and mms.datafinal and mms.idmercadologico = cast(p.idsetor as varchar(16)) and mms.idempresa = x.idempresa)	
+Where
+	1=1
+	$v{filtroEmpresa}
+	and x.datavencimento >= current_date - 5
+	and x.datavencimento <= current_date + (Case when coalesce(mms.valor::int,0) > 0 then coalesce(mms.valor::int,0) else coalesce(mm.valor::int,10) end)
+	and x.estoqueatual > 0
+	and x.saldoestoquedataproxima >= 0
+sql_var(sql) no_exec;
+
+
+xlsx
+<name>auditoria_produtos_proximo_do_vencimento</name>
+<template>auditoria_produtos_proximo_do_vencimento.xlsx</template>
+	<parameters>
+		<parameter>
+			<name>titulo</name>
+			<value><![CDATA[$v{titulo}]]></value>
+		</parameter>
+		<parameter>
+			<name>tituloFiltro</name>
+			<value><![CDATA[$v{tituloFiltro}]]></value>
+		</parameter>
+	</parameters>
+;
+
+set run = new bdo.util.XLSXExport(execScript)
+						.setName("auditoria_produtos_proximo_do_vencimento")
+						.setRowAccessWindowSize(1000)
+						.openXLSXAsTemplate()
+						.getSheet("dados")
+						.setConnection(execScript.getConnection())
+						.setCurrentRow(2)
+						.exportSQL("$v{sql}", "rowCount")
+						.writeToFile();

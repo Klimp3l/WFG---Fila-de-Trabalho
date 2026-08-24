@@ -1,10 +1,11 @@
-# versao 1.2
+# versao 1.3
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
 # | 04/05/2022 | Bernardo    | 		       | 	 	     | Criação.
 # | 06/08/2026 | Bernardo    | 		       | 	 	     | Incluídas colunas padrão da conferência de vencimento.
 # | 06/08/2026 | Bernardo    | 		       | 	 	     | Busca o tipo de situação da atividade no envio.
+# | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Ajustado a construção da consulta para busca dos dados do produto.
 
 <script_function name="getAtividades">
 	~write_exec_log;
@@ -63,7 +64,8 @@
 		wb.idwfatividade as idwfatividade,
 		wb.wfatividade as wfatividade,
 		json_agg(
-			json_build_object(
+			(
+			jsonb_build_object(
 				'idwffilatrabalho', wb.idwffilatrabalho,
 				'idwfocorrencia', wb.idwfocorrencia,
 				'idempresa', wb.idempresa,
@@ -81,9 +83,11 @@
 				'produto', p.descricao,
 				'imagem', p.foto,
 				'idwfatividaderealizada', wb.idwfatividaderealizada,
-				'datainclusao', wb.datainclusao::varchar,
-				'horainclusao', wb.horainclusao,
-				
+				'datainclusao', to_char(wb.datainclusao, 'dd/MM/yyyy'),
+				'horainclusao', wb.horainclusao
+			)
+			||
+			jsonb_build_object(
 				/* Buscado na hora */
 				'idfamilia', f.idfamilia,
 				'familia', f.descricao,
@@ -97,10 +101,10 @@
 				
 				'classe', cp.classe,
 				'valorprecovenda', ppc.valorprecovenda,
-				'diassemvenda', (current_date-1) - pr.dataultimavenda,
-				'diasentrada', (current_date-1) - pr.dataultimaentrada,
-				'dataultimaentrada', to_char(pr.dataultimaentrada, 'yyyy-mm-dd'),
-				'dataultimavenda', to_char(pr.dataultimavenda, 'yyyy-mm-dd'),
+				'diassemvenda', (current_date) - pr.dataultimavenda,
+				'diasentrada', (current_date) - pr.dataultimaentrada,
+				'dataultimaentrada', to_char(pr.dataultimaentrada, 'dd/MM/yyyy'),
+				'dataultimavenda', to_char(pr.dataultimavenda, 'dd/MM/yyyy'),
 				'qtdultimaentrada', pr.qtdeultimaentrada,
 				'qtdeultimavenda', pr.qtdeultimavenda,
 				'valorcustoaquisicao', ppc.valorcustoaquisicao,
@@ -139,22 +143,67 @@
 					Where 
 						esa.idproduto = p.idproduto 
 						and esa.idempresa in ($v{idempresaCD#0})
-				), 0),
-
-				
+				), 0)
+			)
+			||
+			jsonb_build_object(
 				/* Vem da geração de fila trabalho */
-				'datavalidade', (wb.valores->>'datavalidade')::varchar,
+				'datavalidade', (
+					case
+						when (wb.valores->>'datavalidade') ~ '^\d{4}-\d{2}-\d{2}$'
+							then to_char(to_date(wb.valores->>'datavalidade', 'yyyy-MM-dd'), 'dd/MM/yyyy')
+						when (wb.valores->>'datavalidade') ~ '^\d{2}/\d{2}/\d{4}$'
+							then to_char(to_date(wb.valores->>'datavalidade', 'dd/MM/yyyy'), 'dd/MM/yyyy')
+						when (wb.valores->>'datavalidade') ~ '^\d{2}/\d{2}/\d{2}$'
+							then to_char(to_date(wb.valores->>'datavalidade', 'dd/MM/yy'), 'dd/MM/yyyy')
+						when (wb.valores->>'datavalidade') ~ '^\d{8}$'
+							then to_char(to_date(wb.valores->>'datavalidade', 'ddMMyyyy'), 'dd/MM/yyyy')
+						else nullif(wb.valores->>'datavalidade', '')
+					end
+				),
 				'qtdproduzido', wb.valores->>'qtdproduzido',
 				'qtdestoquecorreta', wb.valores->>'qtdestoquecorreta',
-				'datavencimento', (wb.valores->>'datavencimento')::varchar,
+				'datavencimento', (
+					case
+						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{4}-\d{2}-\d{2}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'yyyy-MM-dd'), 'dd/MM/yyyy')
+						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{2}/\d{2}/\d{4}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'dd/MM/yyyy'), 'dd/MM/yyyy')
+						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{2}/\d{2}/\d{2}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'dd/MM/yy'), 'dd/MM/yyyy')
+						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{8}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'ddMMyyyy'), 'dd/MM/yyyy')
+						else nullif(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), '')
+					end
+				),
 				'dataprevisaosaida', (wb.valores->>'dataprevisaosaida')::varchar,
 				'classificacao', wb.valores->>'classificacao',
 				'qtdeabastecimento', wb.valores->>'qtdeabastecimento',
 				'qtdeabastecer', wb.valores->>'ruptura',
 				'saldoestoquedataproxima', wb.valores->>'saldoestoquedataproxima',
-				'diasparavencimento', wb.valores->>'diasparavencimento',
+				'diasparavencimento', coalesce(
+					wb.valores->>'diasparavencimento',
+					(
+						coalesce(
+							nullif(wb.chaves->>'datavencimento', ''),
+							nullif(wb.valores->>'datavencimentoinclusao', '')
+						)::date - current_date
+					)::varchar
+				),
 				'qtdrevisada', wb.valores->>'qtdrevisada',
-				'datavencimentorevisada', (wb.valores->>'datavencimentorevisada')::varchar,
+				'datavencimentorevisada', (
+					case
+						when (wb.valores->>'datavencimentorevisada') ~ '^\d{4}-\d{2}-\d{2}$'
+							then to_char(to_date(wb.valores->>'datavencimentorevisada', 'yyyy-MM-dd'), 'dd/MM/yyyy')
+						when (wb.valores->>'datavencimentorevisada') ~ '^\d{2}/\d{2}/\d{4}$'
+							then to_char(to_date(wb.valores->>'datavencimentorevisada', 'dd/MM/yyyy'), 'dd/MM/yyyy')
+						when (wb.valores->>'datavencimentorevisada') ~ '^\d{2}/\d{2}/\d{2}$'
+							then to_char(to_date(wb.valores->>'datavencimentorevisada', 'dd/MM/yy'), 'dd/MM/yyyy')
+						when (wb.valores->>'datavencimentorevisada') ~ '^\d{8}$'
+							then to_char(to_date(wb.valores->>'datavencimentorevisada', 'ddMMyyyy'), 'dd/MM/yyyy')
+						else nullif(wb.valores->>'datavencimentorevisada', '')
+					end
+				),
 				'qtdvendidoaposconferencia', wb.valores->>'qtdvendidoaposconferencia',
 				'estoquequantidade', wb.valores->>'estoquequantidade',
 				'qtdultinventario', wb.valores->>'qtdultinventario',
@@ -162,6 +211,7 @@
 				'percentualabastecimento', wb.valores->>'percentualabastecimento',
 				'capacidade', wb.valores->>'capacidade'
 			)
+			)::json
 		) as produtos
 		
 		,coalesce((
@@ -170,7 +220,9 @@
 					json_build_object(
 						'idwfatividaderealizada', ar.idwfatividaderealizada,
 						'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, ''),
-						'tiposituacao', ar.tiposituacao
+						'tiposituacao', ar.tiposituacao,
+						'nomeCampoDigital', lower(nullif(trim(ar.nomecampodigital), '')),
+						'valorDefaultCampoDigital', ar.valordefaultcampodigital
 					)
 				) as atividadeselegiveis
 			from
@@ -214,7 +266,16 @@
 					json_build_object('key', 'datavalidade', 'label', 'Data validade', 'type', 'input', 'inputType', 'date', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark'),
 					json_build_object('key', 'datavencimento', 'label', 'Dt. Venc.', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark', 'defaultVisible', true),
 					json_build_object('key', 'diasparavencimento', 'label', 'Dias p/ Venc.', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days', 'defaultVisible', true),
-					json_build_object('key', 'datavencimentorevisada', 'label', 'Dt. Venc. Revisada', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-check', 'defaultVisible', true)
+					json_build_object(
+						'key', 'datavencimentorevisada',
+						'label', 'Dt. Venc. Revisada',
+						'type', case when wb.idwfatividade = 30010 then 'date' else 'input' end,
+						'inputType', case when wb.idwfatividade = 30010 then null else 'date' end,
+						'searchable', true,
+						'sortable', true,
+						'icon', 'fa-solid fa-calendar-check',
+						'defaultVisible', true
+					)
 				)
 			),
 			json_build_object(
@@ -236,7 +297,16 @@
 					json_build_object('key', 'capacidade', 'label', 'Capacidade', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-cubes'),
 					json_build_object('key', 'qtdunentrada', 'label', 'Quantidade unidade entrada', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dolly'),
 					json_build_object('key', 'qtdproduzido', 'label', 'Quantidade produzido', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set'),
-					json_build_object('key', 'qtdrevisada', 'label', 'Qtd. Revisada', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-clipboard-check', 'defaultVisible', true),
+					json_build_object(
+						'key', 'qtdrevisada',
+						'label', 'Qtd. Revisada',
+						'type', case when wb.idwfatividade = 30010 then 'inputNumber' else 'input' end,
+						'inputType', case when wb.idwfatividade = 30010 then null else 'inputNumber' end,
+						'searchable', true,
+						'sortable', true,
+						'icon', 'fa-solid fa-clipboard-check',
+						'defaultVisible', true
+					),
 					json_build_object('key', 'qtdvendidoaposconferencia', 'label', 'Qtd. Vendido Após Conf.', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-cart-shopping', 'defaultVisible', true)
 				)
 			),
@@ -310,10 +380,14 @@
 	commit ;
 
 	<script_java_groovy name="update">
+		import groovy.json.JsonOutput;
 		import groovy.json.JsonSlurper;
 		import bdo.util.SQLUtilX;
+		import groovy.sql.Sql;
+		import org.postgresql.util.PGobject;
 
 		def atividade = new JsonSlurper().parseText(execScript.getValueVar('wffilatrabalho'));
+		def sql = new Sql(execScript.getConnection());
 
 		String execId = execScript.getValueVar('execId');
 		String dataAtual = execScript.getValueVar('dataAtual');
@@ -327,6 +401,8 @@
 		
 		SQLUtilX sqlUtilX = new SQLUtilX('wffilatrabalho', 'idwfatividaderealizada, observacao, idtarefaexecucaoatividaderealizada, dataatividaderealizada, horaatividaderealizada', 'idwffilatrabalho');
 		sqlUtilX.setConnectionX(execScript.getConnection());
+		SQLUtilX sqlUtilOcorrencia = new SQLUtilX('wfocorrencia', 'valores', 'idwfocorrencia');
+		sqlUtilOcorrencia.setConnectionX(execScript.getConnection());
 
 		sqlUtilX.setInt(null)
 				.setString(null)
@@ -335,15 +411,17 @@
 				.setString(horaAtual);
 				
 		String response = '';
-		Map<Integer, String> tiposSituacaoPorAtividade = new HashMap<>();
+		Map<Integer, Map<String, String>> configuracaoPorAtividade = new HashMap<>();
 
 		for (obj in atividade.encaminhamentos) {
 			if (obj.idwfatividadeencaminhamento) {
 				Integer idWFAtividadeRealizada = (obj.idwfatividadeencaminhamento as Number).intValue();
 
-				if (!tiposSituacaoPorAtividade.containsKey(idWFAtividadeRealizada)) {
+				if (!configuracaoPorAtividade.containsKey(idWFAtividadeRealizada)) {
 					def statement = execScript.getConnection().prepareStatement('''
-						select tiposituacao
+						select
+							tiposituacao,
+							lower(nullif(trim(nomecampodigital), '')) as nomecampodigital
 						from wfatividaderealizada
 						where idwfatividaderealizada = ?
 					''');
@@ -352,10 +430,12 @@
 					try {
 						statement.setInt(1, idWFAtividadeRealizada);
 						resultSet = statement.executeQuery();
-						tiposSituacaoPorAtividade.put(
-							idWFAtividadeRealizada,
-							resultSet.next() ? resultSet.getString('tiposituacao') : ''
-						);
+						Map<String, String> configuracao = new HashMap<>();
+						if (resultSet.next()) {
+							configuracao.put('tiposituacao', resultSet.getString('tiposituacao'));
+							configuracao.put('nomecampodigital', resultSet.getString('nomecampodigital'));
+						}
+						configuracaoPorAtividade.put(idWFAtividadeRealizada, configuracao);
 					} finally {
 						if (resultSet != null) {
 							resultSet.close();
@@ -364,19 +444,20 @@
 					}
 				}
 
-				if ('F'.equals(tiposSituacaoPorAtividade.get(idWFAtividadeRealizada))) {
+				Map<String, String> configuracaoAtividade = configuracaoPorAtividade.get(idWFAtividadeRealizada);
+				if ('F'.equals(configuracaoAtividade?.get('tiposituacao'))) {
 					hasAtividadeFinalizacao = true;
 					idWFFilatrabalhoFinalizacao.append(obj.idwffilatrabalho).append(',');
 				}
 
 				if (obj?.qtdproduzido) {
-					obj.observacao = obj.observacao + " | Quantidade produzido: " + obj.qtdproduzido;
+					obj.observacao = obj.observacao + " | Qtd. Produzido: " + obj.qtdproduzido;
 				}
 				if (obj?.qtdestoquecorreta) {
-					obj.observacao = obj.observacao + " | Quantidade estoque correto: " + obj.qtdestoquecorreta;
+					obj.observacao = obj.observacao + " | Qtd Estoque Correta: " + obj.qtdestoquecorreta;
 				}
 				if (obj?.datavalidade) {
-					obj.observacao = obj.observacao + " | Data validade: " + obj.datavalidade;
+					obj.observacao = obj.observacao + " | Data de validade: " + obj.datavalidade;
 				}
 
 				sqlUtilX.setIndex(-1).setIndexPK(-1)
@@ -385,6 +466,37 @@
 					.setIntPK(obj.idwffilatrabalho);
 					
 				response = sqlUtilX.update(msg1, msg2);
+
+				if (!response.contains(msg2)) {
+					String valores = sql.firstRow(
+						'select valores::text as valores from wfocorrencia where idwfocorrencia = ?',
+						[obj.idwfocorrencia]
+					)?.valores;
+					def objValores = new JsonSlurper().parseText(valores ?: '{}');
+
+					objValores.saldoestoquedataproximaposenc = obj.saldoestoquedataproxima;
+					objValores.qtdrevisada = obj.qtdrevisada == '' || obj.qtdrevisada == null
+						? obj.saldoestoquedataproxima
+						: obj.qtdrevisada;
+					objValores.datavencimentorevisada = obj.datavencimentorevisada == '' || obj.datavencimentorevisada == null
+						? obj.datavencimento
+						: obj.datavencimentorevisada;
+
+					String nomeCampoDigital = configuracaoAtividade?.get('nomecampodigital');
+					if (nomeCampoDigital && obj.camposDigitais instanceof Map && obj.camposDigitais.containsKey(nomeCampoDigital)) {
+						objValores[nomeCampoDigital] = obj.camposDigitais[nomeCampoDigital];
+					}
+
+					PGobject valoresJson = new PGobject();
+					valoresJson.setType('json');
+					valoresJson.setValue(JsonOutput.toJson(objValores));
+
+					sqlUtilOcorrencia.setIndex(-1).setIndexPK(-1)
+						.setObject(valoresJson)
+						.setIntPK(obj.idwfocorrencia);
+
+					response = sqlUtilOcorrencia.update(msg1, msg2);
+				}
 			}
 
 			if (response.contains(msg2)) {

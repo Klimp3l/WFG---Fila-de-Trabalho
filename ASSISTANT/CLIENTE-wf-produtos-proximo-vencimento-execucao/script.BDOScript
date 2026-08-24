@@ -1,0 +1,88 @@
+# versao 1.0
+
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 23/10/2019 | Giovani     | Anderson    | 18066  	 | Criação.
+# | 17/12/2021 | Douglas     | Elcio       | 25508  	 | Adicionada include para evitar execuções simultaneas
+
+$include{HEAVEN-script-sql-interrompe-exec-etl, "etl-execucao"}include
+$include{HEAVEN-script-sql-busca-config-tarefa, "'$v{apelido}'"}include
+
+# Impede que a tarefa seja rodada 2 vezes simultaneamente. 
+$include{script-sql-verifica-execucao-tarefa}include
+
+connect $v{ds_bridge};
+
+
+set fim  = 'Fim :)';
+
+sql 
+With
+	tarefas as (
+		/* #! Gera itens */
+		Select 'CLIENTE-auditoria-produtos-proximo-vencimento' apelido Union all
+		
+	
+		/* #! Expira as ocorrências */
+		Select 'HEAVEN-wf-expira-wfocorrencia' apelido Union all
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-expira-ocorrencia-estorno' apelido Union all
+
+		/* #! Expira as filas de trabalho */
+		Select 'HEAVEN-wf-expira-wffilatrabalho' apelido Union all
+
+		/* #! Atualiza Data de Vencimento */
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-atualiza-data-vencimento' apelido Union all
+
+		/* #! Tenta atribuir a fila sem usuário responsável novamente */
+		Select 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico' apelido Union all
+
+		/* #! Gera as ocorrências */
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-gera-ocorrencia' apelido Union all
+
+		/* #! Monitoramento */
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-expira-qtd-zerada' apelido Union all
+
+		/* #! Gera relatórios */
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-relatorio-verificar-produto' apelido Union all
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-relatorio-encaminhar-situacao' apelido Union all
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-relatorio-analise-resultado' apelido Union all
+		Select 'CLIENTE-wf-produtos-proximo-vencimento-relatorio-comprador' apelido Union all		
+
+		/* #! Fim */
+		Select '$v{fim}'
+	)
+Select
+	'' email,
+	0 tipo,
+	t.apelido id
+From
+	tarefas t
+sql_var(sql_for_each);
+
+for_each_dest <columnDest>email</columnDest>
+	<columnDestType>tipo</columnDestType>
+	<columnId>id</columnId>
+	<sqlVar>$v{sql_for_each}</sqlVar>;
+
+stop_if '$v{id}'.equals('$v{fim}');
+
+run_script_java_groovy run;
+
+<script_java_groovy name="run">
+	import bdo.srv.exec.script.ExecTarefa;
+	import bdo.srv.exec.script.ExecScript;
+
+	ExecScript execScriptChild = new ExecTarefa(execScript.getValueVar('id'), execScript).getExecScriptChild();
+
+	/* # Produtos Próximos do Vencimento */
+	execScriptChild.addVar('WFProcesso_idWFProcesso', 30002);
+
+	execScriptChild.addVar('WFProcessoEvento_idWFProcessoEvento', 30005);
+	execScriptChild.addVar('WFOcorrencia_idWFProcessoEvento', 30005);
+
+	/* # WFOcorrencia_apelidoTarefaEncaminhamento */
+	execScriptChild.addVar('WFOcorrencia_apelidoTarefaEncaminhamento', 'HEAVEN-wf-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico');
+
+	execScriptChild.run();
+</script_java_groovy>

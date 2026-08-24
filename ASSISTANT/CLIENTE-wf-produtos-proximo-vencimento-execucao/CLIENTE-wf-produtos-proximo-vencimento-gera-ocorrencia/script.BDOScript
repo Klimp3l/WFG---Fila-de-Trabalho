@@ -1,0 +1,146 @@
+# versao 1.3
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 23/10/2019 | Giovani     | Anderson    | 18066  	 | Criação.
+# | 21/11/2019 | Giovani     | Stephanie   | 18388  	 | Adicionado filtro para ignorar produtos/notas de entrada que (técnicamente) já venceram.
+# | 22/01/2021 | Giovani     | Stephanie   | 22513  	 | Adicionado filtro para ignorar ocorrências quais o produto, após a entrada, ficou com o estoque zerado em algum dia.
+# | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Permitidas ocorrências simultâneas do produto para datas de vencimento diferentes.
+
+connect $v{ds_bridge};
+
+~write_exec_log;
+
+
+begin_transaction;
+
+	sql_exec
+	With 
+		wbase as (
+			Select x.* from (
+				Select distinct
+					x.idempresa
+					,x.idproduto
+					,x.numeronf
+					,x.valorprecovenda
+					,x.datamovimento
+					,x.datavencimento
+					,x.saldoestoquedataproxima
+					,row_number() over(
+						partition by x.idempresa, x.idproduto, x.datavencimento
+						order by x.numeronf desc
+					) as rn
+				From
+					tbItensVencimento x
+					inner join produto p on p.idproduto = x.idproduto
+					cross join lateral (
+						Select coalesce(
+							(
+								Select max(mms.valor::int)
+								From metamercadologico mms
+								Where mms.idmeta = 37
+									and current_date between mms.datainicial and mms.datafinal
+									and mms.idmercadologico = cast(p.idsetor as varchar(16))
+									and mms.idempresa = x.idempresa
+									and coalesce(mms.valor, 0) > 0
+							),
+							(
+								Select max(mm.valor::int)
+								From metamercadologico mm
+								Where mm.idmeta = 20
+									and current_date between mm.datainicial and mm.datafinal
+									and mm.idmercadologico = cast(p.iddepartamento as varchar(16))
+									and mm.idempresa = x.idempresa
+									and coalesce(mm.valor, 0) > 0
+							),
+							10
+						) as dias
+					) cfg
+				Where
+					/* #! não existe ocorrência ativa para o mesmo produto e validade */
+					not exists (
+						Select 	null
+						From 	wfocorrencia o
+						Where 	o.expirada = 'N' 
+								and o.idempresa = x.idempresa
+								and (o.chaves->>'idproduto')::bigint = x.idproduto
+								and coalesce(
+									nullif(o.chaves->>'datavencimento', '')::date,
+									nullif(o.valores->>'datavencimentoinclusao', '')::date
+								) = x.datavencimento
+								and o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+								and o.idwffilatrabalhofinalizacao is null 
+					)
+
+					/* #! não existe ocorrência da mesma nota e validade */
+					and not exists (
+						Select 	null
+						From 	wfocorrencia o
+						Where 	o.idempresa = x.idempresa
+								and (o.chaves->>'idproduto')::bigint = x.idproduto
+								and (o.chaves->>'numeronf')::bigint = x.numeronf
+								and coalesce(
+									nullif(o.chaves->>'datavencimento', '')::date,
+									nullif(o.valores->>'datavencimentoinclusao', '')::date
+								) = x.datavencimento
+								and o.idwfprocessoevento = $v{WFProcessoEvento_idWFProcessoEvento}
+								and o.expirada = 'N'
+								and o.idwffilatrabalhofinalizacao is null
+					)
+
+					and x.estoqueatual > 0
+					and x.saldoestoquedataproxima > 0.
+					and x.datavencimento >= current_date
+					and x.datavencimento <= current_date + cfg.dias
+			) x
+			Where
+				x.rn = 1
+		),
+		ocorrencias as (
+			Select 
+				$v{WFProcessoEvento_idWFProcessoEvento} as idwfprocessoevento
+				,x.idempresa
+				,jsonb_build_object(
+					'idproduto', x.idproduto
+					,'numeronf', x.numeronf
+					,'datavencimento', x.datavencimento
+				) as chaves
+				,'A' as tipoinclusao
+				,'A' as tipoencaminhamento
+				,'$v{WFOcorrencia_apelidoTarefaEncaminhamento}' as apelidotarefaencaminhamento
+				,jsonb_build_object(
+					'valorprecovenda', x.valorprecovenda
+					,'datavencimentoinclusao', x.datavencimento
+					,'datavencimento', x.datavencimento
+					,'diasparavencimento', x.datavencimento - current_date
+					,'saldoestoquedataproxima', x.saldoestoquedataproxima
+				) as valores
+				,current_date as datainclusao
+				,cast(current_time as char(8)) as horainclusao
+				,$v{idUsuario} as idusuarioinclusao
+				,$v{execId} as idtarefaexecucaoinclusao
+			From
+				wbase x
+			Where
+				not exists (
+					Select 	NULL
+					From	estoquedia ed
+					Where	ed.idempresa = x.idempresa
+							and ed.idproduto = x.idproduto
+							and ed.datamovimento > x.datamovimento
+							and ed.quantidade <= 0.
+				)
+		)
+	INSERT INTO WFOcorrencia (idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao)
+	Select 	idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao
+	From 	ocorrencias
+	;
+
+commit;
+
+# Gera fila de trabalho inicial
+$include{
+	script:HEAVEN-wf-gera-wffilatrabalho-inicial-include, 
+	"execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento')",
+	"execScript.getValueVar('WFProcessoEvento_idWFProcessoEvento')"
+}include

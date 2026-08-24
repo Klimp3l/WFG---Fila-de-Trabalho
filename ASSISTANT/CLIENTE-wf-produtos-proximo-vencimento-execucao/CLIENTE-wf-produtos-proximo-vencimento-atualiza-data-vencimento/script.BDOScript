@@ -1,0 +1,104 @@
+# versao 1.1
+
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
+# | 25/02/2021 | Giovani     | Stephanie   | 22734  	 | Criação.
+# | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Atualizada a validade usando a identidade da ocorrência, sem ambiguidade entre lotes.
+
+set WFProcessoEvento_idWFProcessoEvento = '$v{WFProcessoEvento_idWFProcessoEvento#}'.equals('') ? '30005' : $v{WFProcessoEvento_idWFProcessoEvento};
+
+connect $v{ds_bridge};
+
+set expOcorrencias = 'temp_$v{idTarefa}_$v{execId}';
+sql_exec CREATE TEMPORARY TABLE $v{expOcorrencias} (
+	idwfocorrencia integer
+);
+
+begin_transaction;
+
+	sql_exec 
+	With
+		ocorrencias as (
+			Select
+				o.idwfocorrencia as idwfocorrenciaupdt
+				,coalesce(o.valores, '{}'::jsonb) || jsonb_build_object(
+					'datavencimentoinclusao', eiv.datavencimento,
+					'datavencimento', eiv.datavencimento,
+					'diasparavencimento', eiv.datavencimento - current_date,
+					'datavencimentorevisada', to_char(eiv.datavencimento, 'dd/MM/yyyy')
+				) as valoresnew
+				,jsonb_set(
+					coalesce(o.chaves, '{}'::jsonb),
+					'{datavencimento}',
+					to_jsonb(eiv.datavencimento),
+					true
+				) as chavesnew
+			From
+				wfocorrencia o
+				inner join entrada e on (e.idempresa = o.idempresa and e.numeronf = (o.chaves->>'numeronf')::bigint)
+				inner join lateral (
+					Select eiv.datavencimento
+					From entradaitemvcto eiv
+					Where eiv.idempresa = e.idempresa
+						and eiv.identrada = e.identrada
+						and eiv.idproduto = (o.chaves->>'idproduto')::bigint
+					Order by
+						abs(
+							eiv.datavencimento - coalesce(
+								nullif(o.chaves->>'datavencimento', '')::date,
+								nullif(o.valores->>'datavencimentoinclusao', '')::date
+							)
+						),
+						eiv.datavencimento
+					Limit 1
+				) eiv on true
+			Where
+				eiv.datavencimento is distinct from coalesce(
+					nullif(o.chaves->>'datavencimento', '')::date,
+					nullif(o.valores->>'datavencimentoinclusao', '')::date
+				)
+				and o.expirada = 'N'
+				and o.idwfprocessoevento in ($v{WFProcessoEvento_idWFProcessoEvento})
+				and o.datainclusao = current_date-60
+		),
+		updated as (
+			Update	WFOcorrencia o
+			Set		valores = x.valoresnew
+					,chaves = x.chavesnew
+			From	ocorrencias x
+			Where	o.idwfocorrencia = x.idwfocorrenciaupdt
+			RETURNING *
+		),
+		ocorrenciaexpirar as (
+			Select
+				o.idwfocorrencia as idwfocorrenciaexpirar
+			From
+				updated o
+				inner join produto p on (p.idproduto = (o.chaves->>'idproduto')::bigint)
+				left join metamercadologico mm on (mm.idmeta = 20 and current_date between mm.datainicial and mm.datafinal and mm.idmercadologico = cast(p.iddepartamento as varchar(16)) and mm.idempresa = o.idempresa)
+			Where
+				((o.valores->>'datavencimentoinclusao')::date <= current_date - 5 or (o.valores->>'datavencimentoinclusao')::date >= current_date + coalesce(mm.valor::int,10))
+				and o.idwffilatrabalhofinalizacao is null
+		)
+	INSERT INTO $v{expOcorrencias} (idwfocorrencia)
+	Select x.idwfocorrenciaexpirar as idwfocorrencia
+	From ocorrenciaexpirar x
+	;
+
+commit;
+
+begin_transaction;
+	sql_exec
+	Update	WFOcorrencia o
+	Set		expirada = 'S'
+			,dataexpiracao = current_date
+			,horaexpiracao = cast(current_time as varchar(8))
+			,idtarefaexecucaoexpiracao = $v{execId}
+	From	$v{expOcorrencias} x
+	Where	o.idwfocorrencia = x.idwfocorrencia;
+commit;
+
+
+
+
+

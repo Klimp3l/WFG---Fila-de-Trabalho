@@ -1,4 +1,4 @@
-# versao 1.6
+# versao 1.7
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
@@ -11,6 +11,7 @@
 # | 11/12/2025 | Elcio       | 	           | 37687       | Fix: Alterar de buscar campo diasparavencimento para calcular: Vecto - Dia atual
 # | 08/04/2026 | Bernardo    | 	           | 38237       | fix(Campos Data): Ajustado para formatar datas quando é inputado manualmente.
 # | 10/04/2026 | Bernardo    | 	           | 38237       | feat(Campos Data): Regras de negócio para campos data.
+# | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Associada a fila à validade específica da ocorrência.
 
 write_exec_log;
 	
@@ -164,7 +165,21 @@ From (
 		wffilatrabalho ft 
 		inner join wfocorrencia o on (o.idwfocorrencia = ft.idwfocorrencia)
 		inner join produto p on (p.idproduto = (o.chaves->>'idproduto')::bigint)
-		left join tbItensVencimento x on (x.idempresa = ft.idempresa and x.idproduto = p.idproduto and x.numeronf = (o.chaves->>'numeronf')::bigint)
+		left join tbItensVencimento x on (
+			x.idempresa = ft.idempresa
+			and x.idproduto = p.idproduto
+			and x.numeronf = (o.chaves->>'numeronf')::bigint
+			and (
+				coalesce(
+					nullif(o.chaves->>'datavencimento', '')::date,
+					nullif(o.valores->>'datavencimentoinclusao', '')::date
+				) is null
+				or x.datavencimento = coalesce(
+					nullif(o.chaves->>'datavencimento', '')::date,
+					nullif(o.valores->>'datavencimentoinclusao', '')::date
+				)
+			)
+		)
 		left join familia f on (f.idfamilia = p.idfamilia)
 		left join grupo g on (g.idgrupo = p.idgrupo)
 		left join setor s on (s.idsetor = p.idsetor)
