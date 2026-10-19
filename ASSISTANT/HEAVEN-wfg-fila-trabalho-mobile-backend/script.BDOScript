@@ -1,4 +1,4 @@
-# versao 1.5
+# versao 1.6
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
@@ -8,6 +8,8 @@
 # | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Ajustado a construção da consulta para busca dos dados do produto.
 # | 24/08/2026 | Bernardo    | Nathan      | 39425	     | Campo valor alterado conforme configurado na atividade realizada.
 # | 19/10/2026 | IANDev      |             |             | Retorna camposusoaplicacao da atividade para o aplicativo.
+# | 19/10/2026 | IANDev      |             |             | Catálogo de colunas único e produtos só com as chaves necessárias.
+# | 19/10/2026 | IANDev      |             |             | Catálogo de colunas passou para o include HEAVEN-wfg-colunas-aplicativo-include.
 
 <script_function name="getAtividades">
 	~write_exec_log;
@@ -31,7 +33,7 @@
 			trim(p.descricao) as wfprocesso,
 			a.idwfatividade as idwfatividade,
 			trim(a.descricao) as wfatividade,
-			a.camposusoaplicacao as camposusoaplicacao,
+			a.camposusoaplicacao,
 			ft.idwffilatrabalho,
 			ft.idwffilatrabalhoanterior,
 			ft.idwfocorrencia,
@@ -67,8 +69,9 @@
 		wb.idwfatividade as idwfatividade,
 		wb.wfatividade as wfatividade,
 		wb.camposusoaplicacao as camposusoaplicacao,
-		json_agg(
-			(
+		json_agg((
+			select coalesce(jsonb_object_agg(chave.key, chave.value), '{}'::jsonb)
+			from jsonb_each(
 			jsonb_build_object(
 				'idwffilatrabalho', wb.idwffilatrabalho,
 				'idwfocorrencia', wb.idwfocorrencia,
@@ -210,8 +213,28 @@
 				'percentualabastecimento', wb.valores->>'percentualabastecimento',
 				'capacidade', wb.valores->>'capacidade'
 			)
-			)::json
-		) as produtos
+			) chave
+		where
+			case
+				when wb.camposusoaplicacao is null
+					or jsonb_typeof(wb.camposusoaplicacao) is distinct from 'array'
+					or jsonb_array_length(case when jsonb_typeof(wb.camposusoaplicacao) = 'array' then wb.camposusoaplicacao else '[]'::jsonb end) = 0
+				then true
+				else (
+					chave.key in (
+						'idwffilatrabalho', 'idwfocorrencia', 'idempresa', 'empresa', 'ean', 'imagem',
+						'idwfatividaderealizada', 'observacao', 'horainclusao',
+						'produto', 'idproduto', 'codigobarras', 'departamento', 'setor', 'grupo', 'familia'
+					)
+					or exists (
+						select 1
+						from jsonb_array_elements(wb.camposusoaplicacao) item
+						where lower(item->>'campo') = chave.key
+					)
+				)
+			end
+	)::json
+) as produtos
 		
 		,coalesce((
 			Select
@@ -230,100 +253,6 @@
 			Where
 				ar.idwfatividade = wb.idwfatividade
 		), '[]') as atividadeselegiveis
-		/* Columns */
-		,json_build_array(
-			json_build_object(
-				'label', 'Produto',
-				'icon', 'fa-solid fa-tags',
-				'itens', json_build_array(
-					json_build_object('key', 'produto', 'label', 'Produto', 'type', 'input', 'searchable', true, 'sortable', true, 'defaultVisible', true),
-					json_build_object('key', 'idproduto', 'label', 'ID Produto', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-genderless', 'defaultVisible', true),
-					json_build_object('key', 'codigobarras', 'label', 'Código barras', 'type', 'input', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-barcode', 'defaultVisible', true),
-					json_build_object('key', 'classe', 'label', 'Classe', 'type', 'multipleSelect', 'options', ARRAY['A', 'B', 'C'], 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-layer-group'),
-					json_build_object('key', 'fornecedor', 'label', 'Fornecedor', 'type', 'input', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-truck-fast')
-				)
-			),
-			json_build_object(
-				'label', 'Mercadológicos',
-				'icon', 'fa-solid fa-layer-group',
-				'itens', json_build_array(
-					json_build_object('key', 'departamento', 'label', 'Departamento', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building'),
-					json_build_object('key', 'setor', 'label', 'Setor', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building'),
-					json_build_object('key', 'grupo', 'label', 'Grupo', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building'),
-					json_build_object('key', 'familia', 'label', 'Família', 'type', 'input', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-building')
-				)
-			),
-			json_build_object(
-				'label', 'Datas',
-				'icon', 'fa-solid fa-calendar-days',
-				'itens', json_build_array(
-					json_build_object('key', 'datainclusao', 'label', 'Data Inclusão', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-plus', 'defaultVisible', true),
-					json_build_object('key', 'diassemvenda', 'label', 'Dias sem venda', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
-					json_build_object('key', 'diasentrada', 'label', 'Dias entrada', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
-					json_build_object('key', 'dataultimavenda', 'label', 'Data última venda', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days'),
-					json_build_object('key', 'dataultimaentrada', 'label', 'Data última entrada', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-day'),
-					json_build_object('key', 'datavalidade', 'label', 'Data validade', 'type', 'input', 'inputType', 'date', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark'),
-					json_build_object('key', 'datavencimento', 'label', 'Dt. Venc.', 'type', 'date', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-xmark', 'defaultVisible', true),
-					json_build_object('key', 'diasparavencimento', 'label', 'Dias p/ Venc.', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-calendar-days', 'defaultVisible', true),
-					json_build_object(
-						'key', 'datavencimentorevisada',
-						'label', 'Dt. Venc. Revisada',
-						'type', case when wb.idwfatividade = 30010 then 'date' else 'input' end,
-						'inputType', case when wb.idwfatividade = 30010 then null else 'date' end,
-						'searchable', true,
-						'sortable', true,
-						'icon', 'fa-solid fa-calendar-check',
-						'defaultVisible', true
-					)
-				)
-			),
-			json_build_object(
-				'label', 'Valores',
-				'icon', 'fa-solid fa-money-bill-wave',
-				'itens', json_build_array(
-					json_build_object('key', 'valorprecovenda', 'label', 'Valor preço venda', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-money-bill-wave', 'defaultVisible', true),
-					json_build_object('key', 'valorcustoaquisicao', 'label', 'Valor custo aquisição', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-hand-holding-dollar')
-				)
-			),
-			json_build_object(
-				'label', 'Quantidade',
-				'icon', 'fa-solid fa-scale-balanced',
-				'itens', json_build_array(
-					json_build_object('key', 'qtdultimaentrada', 'label', 'Quantidade última entrada', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dolly'),
-					json_build_object('key', 'qtdeultimavenda', 'label', 'Quantidade última venda', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dollar-sign'),
-					json_build_object('key', 'qtdvendamedia', 'label', 'Quantidade venda média', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-cart-shopping'),
-					json_build_object('key', 'qtdproducaobandeja', 'label', 'Quantidade produção bandeja', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set'),
-					json_build_object('key', 'capacidade', 'label', 'Capacidade', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-cubes'),
-					json_build_object('key', 'qtdunentrada', 'label', 'Quantidade unidade entrada', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-dolly'),
-					json_build_object('key', 'qtdproduzido', 'label', 'Quantidade produzido', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-kitchen-set'),
-					json_build_object(
-						'key', 'qtdrevisada',
-						'label', 'Qtd. Revisada',
-						'type', case when wb.idwfatividade = 30010 then 'inputNumber' else 'input' end,
-						'inputType', case when wb.idwfatividade = 30010 then null else 'inputNumber' end,
-						'searchable', true,
-						'sortable', true,
-						'icon', 'fa-solid fa-clipboard-check',
-						'defaultVisible', true
-					),
-					json_build_object('key', 'qtdvendidoaposconferencia', 'label', 'Qtd. Vendido Após Conf.', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-cart-shopping', 'defaultVisible', true)
-				)
-			),
-			json_build_object(
-				'label', 'Estoque',
-				'icon', 'fa-solid fa-boxes-stacked',
-				'itens', json_build_array(
-					json_build_object('key', 'qtdestoqueatual', 'label', 'Est. Atual', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked', 'defaultVisible', true),
-					json_build_object('key', 'saldoestoquedataproxima', 'label', 'Saldo Est. (Dt. Próx.)', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked', 'defaultVisible', true),
-					json_build_object('key', 'estoquequantidade', 'label', 'Estoque quantidade', 'type', 'inputNumber', 'searchable', true, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked'),
-					json_build_object('key', 'percentualabastecimento', 'label', 'Percentual abastecimento', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-percent'),
-					json_build_object('key', 'qtdeabastecer', 'label', 'Quantidade abastecer', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-box-open'),
-					json_build_object('key', 'qtdultinventario', 'label', 'Quantidade último inventário', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-boxes-packing'),
-					json_build_object('key', 'qtdestoqueatualcd', 'label', 'Estoque atual CD', 'type', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-warehouse'),
-					json_build_object('key', 'qtdestoquecorreta', 'label', 'Quantidade estoque correto', 'type', 'input', 'inputType', 'inputNumber', 'searchable', false, 'sortable', true, 'icon', 'fa-solid fa-boxes-stacked')
-				)
-			)
-		) as groupcolumns
 	from
 		wbase wb
 		inner join produto p on p.idproduto = wb.idproduto
@@ -359,6 +288,8 @@
 	$> msgBuilder.setCharset('UTF-8');
 	$> sb.append('{"atividades":[').append(msgBuilder.sqlVarToJSON('sqlAtividades')).append(']}');
 </script_function>
+
+$include{script:HEAVEN-wfg-colunas-aplicativo-include}include
 
 <script_function name="update">
 	~write_exec_log;

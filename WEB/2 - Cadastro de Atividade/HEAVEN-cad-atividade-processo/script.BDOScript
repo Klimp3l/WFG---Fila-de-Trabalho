@@ -19,3 +19,6 @@ sql select 'E' "id", 'Executor' "text" union all select 'M', 'Monitor' sql_var(s
 
 connect $v{datasource2};
 sql select idtarefa as idtarefacrud from tarefa where apelido = '$v{apelido}-crud';
+
+# Catálogo de colunas do aplicativo. A função getColunasAplicativo fica disponível nesta tarefa.
+$include{script:HEAVEN-wfg-colunas-aplicativo-include}include

@@ -77,6 +77,7 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 			    if (w2ui.w2uiGridColunas) {
 			    	w2ui.w2uiGridColunas.clear();
 			    }
+			    registroColunasEmExibicao = null;
 			}
 
 			$("#form1").validate({
@@ -238,51 +239,74 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 	</script>
 
 <script_content name="colunasAplicativo">
-			/* Manter alinhado com groupcolumns de HEAVEN-wfg-fila-trabalho-mobile-backend. */
-			var COLUNAS_APLICATIVO = [
-				{ campo: "produto", label: "Produto", grupo: "Produto" },
-				{ campo: "idproduto", label: "ID Produto", grupo: "Produto" },
-				{ campo: "codigobarras", label: "Código barras", grupo: "Produto" },
-				{ campo: "classe", label: "Classe", grupo: "Produto" },
-				{ campo: "fornecedor", label: "Fornecedor", grupo: "Produto" },
-				{ campo: "departamento", label: "Departamento", grupo: "Mercadológicos" },
-				{ campo: "setor", label: "Setor", grupo: "Mercadológicos" },
-				{ campo: "grupo", label: "Grupo", grupo: "Mercadológicos" },
-				{ campo: "familia", label: "Família", grupo: "Mercadológicos" },
-				{ campo: "datainclusao", label: "Data Inclusão", grupo: "Datas" },
-				{ campo: "diassemvenda", label: "Dias sem venda", grupo: "Datas" },
-				{ campo: "diasentrada", label: "Dias entrada", grupo: "Datas" },
-				{ campo: "dataultimavenda", label: "Data última venda", grupo: "Datas" },
-				{ campo: "dataultimaentrada", label: "Data última entrada", grupo: "Datas" },
-				{ campo: "datavalidade", label: "Data validade", grupo: "Datas" },
-				{ campo: "datavencimento", label: "Dt. Venc.", grupo: "Datas" },
-				{ campo: "diasparavencimento", label: "Dias p/ Venc.", grupo: "Datas" },
-				{ campo: "datavencimentorevisada", label: "Dt. Venc. Revisada", grupo: "Datas" },
-				{ campo: "valorprecovenda", label: "Valor preço venda", grupo: "Valores" },
-				{ campo: "valorcustoaquisicao", label: "Valor custo aquisição", grupo: "Valores" },
-				{ campo: "qtdultimaentrada", label: "Quantidade última entrada", grupo: "Quantidade" },
-				{ campo: "qtdeultimavenda", label: "Quantidade última venda", grupo: "Quantidade" },
-				{ campo: "qtdvendamedia", label: "Quantidade venda média", grupo: "Quantidade" },
-				{ campo: "qtdproducaobandeja", label: "Quantidade produção bandeja", grupo: "Quantidade" },
-				{ campo: "capacidade", label: "Capacidade", grupo: "Quantidade" },
-				{ campo: "qtdunentrada", label: "Quantidade unidade entrada", grupo: "Quantidade" },
-				{ campo: "qtdproduzido", label: "Quantidade produzido", grupo: "Quantidade" },
-				{ campo: "qtdrevisada", label: "Qtd. Revisada", grupo: "Quantidade" },
-				{ campo: "qtdvendidoaposconferencia", label: "Qtd. Vendido Após Conf.", grupo: "Quantidade" },
-				{ campo: "qtdestoqueatual", label: "Est. Atual", grupo: "Estoque" },
-				{ campo: "saldoestoquedataproxima", label: "Saldo Est. (Dt. Próx.)", grupo: "Estoque" },
-				{ campo: "estoquequantidade", label: "Estoque quantidade", grupo: "Estoque" },
-				{ campo: "percentualabastecimento", label: "Percentual abastecimento", grupo: "Estoque" },
-				{ campo: "qtdeabastecer", label: "Quantidade abastecer", grupo: "Estoque" },
-				{ campo: "qtdultinventario", label: "Quantidade último inventário", grupo: "Estoque" },
-				{ campo: "qtdestoqueatualcd", label: "Estoque atual CD", grupo: "Estoque" },
-				{ campo: "qtdestoquecorreta", label: "Quantidade estoque correto", grupo: "Estoque" }
-			];
+			var COLUNAS_APLICATIVO = [];
 			var visualColunaAplicativo = [{ id: "S", text: "Sim" }, { id: "N", text: "Não" }];
 			var catalogoColunaPorCampo = {};
-			for (var indiceColuna = 0; indiceColuna < COLUNAS_APLICATIVO.length; indiceColuna++) {
-				catalogoColunaPorCampo[COLUNAS_APLICATIVO[indiceColuna].campo] = COLUNAS_APLICATIVO[indiceColuna];
+			var registroColunasEmExibicao = null;
+
+			function aplicarCatalogoColunas(grupos) {
+				COLUNAS_APLICATIVO = [];
+				catalogoColunaPorCampo = {};
+				if (!$.isArray(grupos)) {
+					return;
+				}
+				for (var indiceGrupo = 0; indiceGrupo < grupos.length; indiceGrupo++) {
+					var grupo = grupos[indiceGrupo] || {};
+					var nomeGrupo = grupo.label || "";
+					var itens = $.isArray(grupo.itens) ? grupo.itens : [];
+					for (var indiceItem = 0; indiceItem < itens.length; indiceItem++) {
+						var item = itens[indiceItem] || {};
+						var campo = $.trim(String(item.key || "")).toLowerCase();
+						if (!campo) {
+							continue;
+						}
+						var coluna = { campo: campo, label: item.label || campo, grupo: nomeGrupo };
+						COLUNAS_APLICATIVO.push(coluna);
+						catalogoColunaPorCampo[campo] = coluna;
+					}
+				}
+				if (registroColunasEmExibicao) {
+					displayCamposUsoAplicacao(registroColunasEmExibicao);
+				}
 			}
+
+			function extrairGruposCatalogo(resposta) {
+				var valor = resposta;
+				if (typeof valor === "string") {
+					try {
+						valor = JSON.parse(valor);
+					} catch (error) {
+						return null;
+					}
+				}
+				if ($.isArray(valor)) {
+					valor = valor[0];
+				}
+				if (!valor || typeof valor !== "object") {
+					return null;
+				}
+				var grupos = valor.grupos;
+				if (typeof grupos === "string") {
+					try {
+						grupos = JSON.parse(grupos);
+					} catch (error) {
+						return null;
+					}
+				}
+				return $.isArray(grupos) ? grupos : null;
+			}
+
+			$.ajax({
+				url: "odwctrl?action=execTarefa&ajax=true&apelido=~~~&scriptFunction=getColunasAplicativo", -> $v{apelido};
+				type: "GET",
+				dataType: "json",
+				success: function (resposta) {
+					var grupos = extrairGruposCatalogo(resposta);
+					if (grupos) {
+						aplicarCatalogoColunas(grupos);
+					}
+				}
+			});
 
 			function parseCamposUsoAplicacao(raw) {
 				if (raw == null || raw === "") {
@@ -335,6 +359,7 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 			}
 
 			function displayCamposUsoAplicacao(record) {
+				registroColunasEmExibicao = record || null;
 				w2ui.w2uiGridColunas.clear();
 				var items = parseCamposUsoAplicacao(record && (record.camposusoaplicacao || record.camposUsoAplicacao));
 				for (var i = 0; i < items.length; i++) {
