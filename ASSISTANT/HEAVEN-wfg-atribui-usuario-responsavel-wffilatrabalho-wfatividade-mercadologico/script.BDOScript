@@ -33,7 +33,7 @@ set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.
 
 connect $v{ds_bridge};
 
-set datainiciobuscadados =  '$exp{addDays($v{dataAtual}, -20)}exp';
+set datainiciobuscadados =  '$exp{addDays($v{dataAtual}, -30)}exp';
 
 begin_transaction;
 

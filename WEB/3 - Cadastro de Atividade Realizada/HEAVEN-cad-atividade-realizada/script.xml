@@ -350,6 +350,12 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 							$> msgBuilder.parameter('idwfatividadeinicialtransferir values="sql_var(sql_wfatividadeinicialtransferir)" custom="odw=\\\"input\\\""');
 						</td>
 					</tr>
+					<tr>
+						<td class="input-label">Nome Campo Digital</td>
+						<td><input name="nomecampodigital" id="nomecampodigital" type="text" size="50" maxlength="255" class="odw_parameter_input" odw="input"/></td>
+						<td class="input-label">Valor Default Campo Digital</td>
+						<td><input name="valordefaultcampodigital" id="valordefaultcampodigital" type="text" size="50" maxlength="255" class="odw_parameter_input" odw="input"/></td>
+					</tr>
 				</table>
 				<div id="buttons"></div>
 				<div id="content_parameters_bottom">

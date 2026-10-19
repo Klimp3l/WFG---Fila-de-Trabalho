@@ -1,12 +1,16 @@
-# versao 1.7
+# versao 1.9
 set _iframe = true;
 
 connect $v{ds_bridge};
 
 #sql select idwfprocesso, descricao from wfprocesso where situacao = 'A' order by 2 sql_var(sql_wfprocesso);
 
+# $v{HEAVEN-script-sql-busca-wfprocesso}
 
-$include{HEAVEN-script-sql-busca-wfprocesso}include
+write_exec_log;
+
+
+$include{HEAVEN-script-sql-busca-wfprocesso, "T"}include
 
 
 parameter idwfprocesso label="Processo" type="integer" values="sql_var(sqlwfprocesso)";
@@ -23,3 +27,4 @@ sql select idareaempresa||'' idareaempresa, descricao from areaempresa  Union Se
 
 connect $v{datasource2};
 sql select idtarefa as idtarefacrud from tarefa where apelido = '$v{apelido}-crud';
+

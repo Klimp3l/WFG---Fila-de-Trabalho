@@ -1,0 +1,104 @@
+# versao 1.0
+#
+# Alterações:
+# |    Data    | Programador | Solicitante | Caso Mantis | Descrição
+# | 04/08/2026 | Bernardo    | Anderson    |  38942      | Abre nova fila de trabalho para atividades que possuem configuração de transferência.
+
+~write_exec_log;
+
+connect $v{ds_bridge};
+
+###############
+# Variáveis a serem salvas em TAREFAEXECUCAOVALOR
+###############
+
+sql 
+Select
+	'$v{WFFilaTrabalho_idWFFilatrabalho}' as "WFFilaTrabalho_idWFFilatrabalho"
+	,'$v{WFFilaTrabalho_idWFOcorrencia}' as "WFFilaTrabalho_idWFOcorrencia"
+	,'$v{WFFilaTrabalho_idTarefaExecAtvRealizada}' as "WFFilaTrabalho_idTarefaExecAtvRealizada"
+save_rows(1,1);
+
+set filtro_WFFilaTrabalho_idTarefaExecAtvRealizada = '$v{WFFilaTrabalho_idTarefaExecAtvRealizada#}'.equals('') ? '' : ' and ft.idTarefaExecucaoAtividadeRealizada = $v{WFFilaTrabalho_idTarefaExecAtvRealizada} ';
+set filtro_WFFilaTrabalho_idWFFilatrabalho = '$v{WFFilaTrabalho_idWFFilatrabalho#}'.equals('') ? '' : ' and ft.idwffilatrabalho in ($v{WFFilaTrabalho_idWFFilatrabalho}) ';
+set filtro_WFFilaTrabalho_idWFOcorrencia = '$v{WFFilaTrabalho_idWFOcorrencia#}'.equals('') ? '' : ' and ft.idwfocorrencia in ($v{WFFilaTrabalho_idWFOcorrencia}) ';
+
+connect $v{ds_bridge};
+
+begin_transaction;
+	sql_exec SET LOCAL var.exec_id = '$v{execId}';
+
+	sql_exec
+	With
+		elegiveis as (
+			Select
+				o.idwfocorrencia as idwfocorrenciaorigem
+				,ft.idwffilatrabalho as idwffilatrabalhoorigem
+				,o.idempresa
+				,o.chaves
+				,o.valores
+				,ar.idwfprocessoeventotransferir
+				,ar.idwfatividadeinicialtransferir
+				,ar.idwfimpacto
+				,ar.idareaempresa
+			From
+				wfocorrencia o
+				inner join wffilatrabalho ft on (ft.idwfocorrencia = o.idwfocorrencia)
+				inner join wfatividaderealizada ar on (ar.idwfatividaderealizada = ft.idwfatividaderealizada)
+				inner join wfatividade aDestino on (
+					aDestino.idwfatividade = ar.idwfatividadeinicialtransferir
+					and aDestino.situacao = 'A'
+				)
+				inner join wfprocessoevento peDestino on (
+					peDestino.idwfprocessoevento = ar.idwfprocessoeventotransferir
+					and peDestino.situacao = 'A'
+				)
+			Where
+				o.expirada = 'N'
+				and ft.expirada = 'N'
+				and ar.idwfprocessoeventotransferir is not null
+				and ar.idwfatividadeinicialtransferir is not null
+				and not exists (
+					Select null
+					From wfocorrencia od
+					Where
+						od.expirada = 'N'
+						and od.idempresa = o.idempresa
+						and (od.chaves->>'idproduto') = (o.chaves->>'idproduto')
+						and od.idwfprocessoevento = ar.idwfprocessoeventotransferir
+				)
+				and o.datainclusao >= ar.dataalteracao
+				
+				$v{filtro_WFFilaTrabalho_idTarefaExecAtvRealizada}
+				$v{filtro_WFFilaTrabalho_idWFFilatrabalho}
+				$v{filtro_WFFilaTrabalho_idWFOcorrencia}
+		),
+		ocorrencias as (
+			Select
+				e.idwfprocessoeventotransferir as idwfprocessoevento
+				,e.idempresa
+				,e.chaves
+				,'A' tipoinclusao
+				,'A' tipoencaminhamento
+				,'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico' apelidotarefaencaminhamento
+				,e.valores
+				,current_date datainclusao
+				,cast(current_time as char(8)) horainclusao
+				,$v{idUsuario} idusuarioinclusao
+				,$v{execId} idtarefaexecucaoinclusao
+			From
+				elegiveis e
+		)
+	Insert into WFOcorrencia (idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao)
+	Select 	idwfprocessoevento, idempresa, chaves, tipoencaminhamento, apelidotarefaencaminhamento, valores, tipoinclusao, datainclusao, horainclusao, idusuarioinclusao, idtarefaexecucaoinclusao
+	From 	ocorrencias
+commit;
+
+set WFProcessoEvento_idWFProcessoEvento = "";
+
+# Gera fila de trabalho inicial
+$include{
+	script:HEAVEN-wfg-gera-wffilatrabalho-inicial-include, 
+	"'HEAVEN-wfg-atribui-usuario-responsavel-wffilatrabalho-wfatividade-mercadologico'",
+	"execScript.getValueVar('WFProcessoEvento_idWFProcessoEvento')"
+}include

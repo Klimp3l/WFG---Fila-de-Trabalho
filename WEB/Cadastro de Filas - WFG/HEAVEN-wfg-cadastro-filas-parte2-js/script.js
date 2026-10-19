@@ -49,6 +49,7 @@ Vue.component("wfg-node-filters-generic", {
 							<el-select v-else-if="it.type==='select'" v-model="values[getItemKey(it)]" :multiple="it.multiple" filterable clearable :placeholder="it.placeholder || ''" :disabled="!!it.disabled" style="width:100%;" @change="notifyChange">
 								<el-option v-for="opt in itemOptions(it)" :key="opt.value" :label="opt.label" :value="opt.value"></el-option>
 							</el-select>
+							<el-input v-else-if="it.type==='textarea'" type="textarea" :rows="it.rows || 4" v-model="values[getItemKey(it)]" :placeholder="it.placeholder || ''" :disabled="!!it.disabled" style="width:100%;" @change="notifyChange"></el-input>
 							<el-input v-else v-model="values[getItemKey(it)]" :placeholder="it.placeholder || ''" :disabled="!!it.disabled" @change="notifyChange"></el-input>
 						</el-form-item>
 					</template>
@@ -423,7 +424,10 @@ Vue.component("wfg-node-filters-panel", {
 				usedAliases.add(alias);
 			}
 		});
-		return this.availableNodeTasks.filter((task) => !usedAliases.has(String(task.apelido || "")));
+	return this.availableNodeTasks.filter((task) => {
+		const alias = String(task.apelido || "");
+		return task.allowMultiple === true || !usedAliases.has(alias);
+	});
 	},
 </script_content>
 

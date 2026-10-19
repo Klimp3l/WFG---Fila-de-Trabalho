@@ -6,6 +6,17 @@
 
 ~write_exec_log;
 
+#################
+# Filtro livre  #
+# Sentinela "-" cobre o campo vazio. A condição não pode repetir tres aspas duplas seguidas.
+set filtroLivreRaw = """$v{filtroLivre#-}""";
+set filtroLivreAuditoria = """$v{filtroLivreRaw}""".trim().equals("-") || """$v{filtroLivreRaw}""".trim().equals("") ? "" : """$v{filtroLivreRaw}""".replace("'","''");
+set filtroLivre = """$v{filtroLivreRaw}""".trim().equals("-") || """$v{filtroLivreRaw}""".trim().equals("") ? "" : """
+	and (
+		$v{filtroLivreRaw}
+	)
+""";
+
 ###############
 # Variáveis a serem salvas em TAREFAEXECUCAOVALOR
 ###############
@@ -28,8 +39,13 @@ Select
 	,'$v{ignorarGrupo#false}' as "ignorarGrupo"
 	,'$v{familia#}' as "familia"
 	,'$v{ignorarFamilia#false}' as "ignorarFamilia"
+	,'$v{pesobrutoFiltro#}' as "pesobrutoFiltro"
+	,'$v{pesoliquidoFiltro#}' as "pesoliquidoFiltro"
+	,'$v{possuiCodigoBarras#false}' as "possuiCodigoBarras"
 	,'$v{diasSemVenda#0}' as "diasSemVenda"
 	,'$v{utilizaMetaDiasSemVenda#false}' as "utilizaMetaDiasSemVenda"
+	,'$v{diasComVenda#0}' as "diasComVenda"
+	,'$v{utilizaMetaDiasComVenda#false}' as "utilizaMetaDiasComVenda"
 	,'$v{curvaABC#}' as "curvaABC"
 	,'$v{estoqueZero#false}' as "estoqueZero"
 	,'$v{estoqueNegativo#false}' as "estoqueNegativo"
@@ -40,10 +56,15 @@ Select
 	,'$v{idMetaSemVendaSetor#}' as "idMetaSemVendaSetor"
 	,'$v{idMetaSemVendaGrupo#}' as "idMetaSemVendaGrupo"
 	,'$v{idMetaSemVendaFamilia#}' as "idMetaSemVendaFamilia"
+	,'$v{idMetaComVendaDepartamento#}' as "idMetaComVendaDepartamento"
+	,'$v{idMetaComVendaSetor#}' as "idMetaComVendaSetor"
+	,'$v{idMetaComVendaGrupo#}' as "idMetaComVendaGrupo"
+	,'$v{idMetaComVendaFamilia#}' as "idMetaComVendaFamilia"
 	,'$v{estoqueZeroPontoExposicao#false}' as "estoqueZeroPontoExposicao"
 	,'$v{estoqueNegativoPontoExposicao#false}' as "estoqueNegativoPontoExposicao"
 	,'$v{estoquePositivoPontoExposicao#false}' as "estoquePositivoPontoExposicao"
 	,'$v{pontoExposicao#}' as "pontoExposicao"
+	,'$v{filtroLivreAuditoria}' as "filtroLivre"
 save_rows(1,1);
 
 ######################
@@ -62,16 +83,16 @@ set filtroOcorrencia = '$v{naoGerarOcorrenciaSemFinalizacao#false}'.equals("fals
 
 ############################################################
 # Filtros de empresa, departamento, setor, grupo e família #
-set filtroEmpresa 				= '$v{empresa#}'.equals("") && '$v{ignorarEmpresa#false}'.equals("false") 			? "" : "and e.idempresa in ($v{empresa#})";
-set filtroIgnoraEmpresa 		= '$v{empresa#}'.equals("") && '$v{ignorarEmpresa#false}'.equals("true") 			? "and e.idempresa not in ($v{empresa#})" : "";
-set filtroDepartamento			= '$v{departamento#}'.equals("") && '$v{ignorarDepartamento#false}'.equals("false") 	? "" : "and p.iddepartamento in ($v{departamento#})";
-set filtroIgnoraDepartamento 	= '$v{departamento#}'.equals("") && '$v{ignorarDepartamento#false}'.equals("true") 	? "and p.iddepartamento not in ($v{departamento#})" : "";
-set filtroSetor 				= '$v{setor#}'.equals("") 	&& '$v{ignorarSetor#false}'.equals("false") 				? "" : "and p.idsetor in ($v{setor#})";
-set filtroIgnoraSetor 			= '$v{setor#}'.equals("") && '$v{ignorarSetor#false}'.equals("true") 				? "and p.idsetor not in ($v{setor#})" : "";
-set filtroGrupo 				= '$v{grupo#}'.equals("") && '$v{ignorarGrupo#false}'.equals("false") 				? "" : "and p.idgrupo in ($v{grupo#})";
-set filtroIgnoraGrupo 			= '$v{grupo#}'.equals("") && '$v{ignorarGrupo#false}'.equals("true") 				? "and p.idgrupo not in ($v{grupo#})" : "";
-set filtroFamilia 				= '$v{familia#}'.equals("") && '$v{ignorarFamilia#false}'.equals("false") 			? "" : "and p.idfamilia in ($v{familia#})";
-set filtroIgnoraFamilia 		= '$v{familia#}'.equals("") && '$v{ignorarFamilia#false}'.equals("true") 			? "and p.idfamilia not in ($v{familia#})" : "";
+set filtroEmpresa 				= !'$v{empresa#}'.equals("") && '$v{ignorarEmpresa#false}'.equals("false") 				? "and e.idempresa in ($v{empresa#})" : "";
+set filtroIgnoraEmpresa 		= !'$v{empresa#}'.equals("") && '$v{ignorarEmpresa#false}'.equals("true") 				? "and e.idempresa not in ($v{empresa#})" : "";
+set filtroDepartamento			= !'$v{departamento#}'.equals("") && '$v{ignorarDepartamento#false}'.equals("false") 	? "and p.iddepartamento in ($v{departamento#})" : "";
+set filtroIgnoraDepartamento 	= !'$v{departamento#}'.equals("") && '$v{ignorarDepartamento#false}'.equals("true")  	? "and p.iddepartamento not in ($v{departamento#})" : "";
+set filtroSetor 				= !'$v{setor#}'.equals("") 	&& '$v{ignorarSetor#false}'.equals("false") 				? "and p.idsetor in ($v{setor#})" : "";
+set filtroIgnoraSetor 			= !'$v{setor#}'.equals("") && '$v{ignorarSetor#false}'.equals("true") 					? "and p.idsetor not in ($v{setor#})" : "";
+set filtroGrupo 				= !'$v{grupo#}'.equals("") && '$v{ignorarGrupo#false}'.equals("false") 					? "and p.idgrupo in ($v{grupo#})" : "";
+set filtroIgnoraGrupo 			= !'$v{grupo#}'.equals("") && '$v{ignorarGrupo#false}'.equals("true") 					? "and p.idgrupo not in ($v{grupo#})" : "";
+set filtroFamilia 				= !'$v{familia#}'.equals("") && '$v{ignorarFamilia#false}'.equals("false") 				? "and p.idfamilia in ($v{familia#})" : "";
+set filtroIgnoraFamilia 		= !'$v{familia#}'.equals("") && '$v{ignorarFamilia#false}'.equals("true") 				? "and p.idfamilia not in ($v{familia#})" : "";
 
 #############################
 # Filtros de Dias Sem Venda #
@@ -84,9 +105,21 @@ set filtroDiasSemVenda = '$v{diasSemVenda#0}'.equals("0") ? "" : "and exists (
 		and pr.dataultimavenda < (current_date - cast(coalesce($v{diasSemVenda#0}, mg.valor, ms.valor, md.valor) as integer))
 )";
 
+#############################
+# Filtros de Dias Com Venda #
+set filtroDiasComVenda = '$v{diasComVenda#0}'.equals("0") ? "" : "and exists (
+	Select 	null
+	From produtoresumo pr
+	Where
+		pr.idempresa = e.idempresa
+		and pr.idproduto = p.idproduto
+		and pr.dataultimavenda >= (current_date - cast(coalesce($v{diasComVenda#0}, mcf.valor, mcg.valor, mcs.valor, mcd.valor) as integer))
+)";
+
 ########################
 # Filtros de Curva ABC #
-set filtroCurvaABC = '$v{curvaABC#}'.equals("") ? "" : "and exists (
+set curvaABC = "$v{curvaABC#}".replace(",","','");
+set filtroCurvaABC = "$v{curvaABC#}".equals("") ? "" : "and exists (
 	Select 	null
 	From classeproduto cp
 	Where
@@ -139,6 +172,23 @@ set filtroGeralPontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals(""
 	)
 """ : "";
 
+########################
+# Filtros Peso Produto #
+set filtroPesoBruto				= '$v{pesobrutoFiltro#}'.equals("") ? "" : ('$v{pesobrutoFiltro#}'.equals("EQ_ZERO") ? "or coalesce(p.pesobruto, 0) = 0" : ('$v{pesobrutoFiltro#}'.equals("GT_ZERO") ? "or coalesce(p.pesobruto, 0) > 0" : ""));
+set filtroPesoLiquido			= '$v{pesoliquidoFiltro#}'.equals("") ? "" : ('$v{pesoliquidoFiltro#}'.equals("EQ_ZERO") ? "or coalesce(p.pesoliquido, 0) = 0" : ('$v{pesoliquidoFiltro#}'.equals("GT_ZERO") ? "or coalesce(p.pesoliquido, 0) > 0" : ""));
+
+set filtroGeralPesoProduto = !"$v{filtroPesoBruto}".equals("") || !"$v{filtroPesoLiquido}".equals("") ? """
+	and (
+		1=0
+		$v{filtroPesoBruto}
+		$v{filtroPesoLiquido}
+	)
+""" : "";
+
+############################
+# Filtro Código de Barras #
+set filtroPossuiCodigoBarras = '$v{possuiCodigoBarras#false}'.equals("false") ? "" : "and coalesce(p.codigobarras, 0) > 0";
+
 #########
 # Withs #
 set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroEstoqueZero}".equals("") ? """
@@ -164,7 +214,7 @@ set withUltimoInventarioEstoque = !"$v{filtroEstoqueNegativo}".equals("") || !"$
 
 ###########
 # Colunas #
-set colunaEstoqueQuantidade = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
+set colunaEstoqueQuantidade = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroDiasComVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
 	,sum(esa.quantidade) estoquequantidade
 """ : ",null::numeric as estoquequantidade";
 set colunaEstoquePontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals("") || !"$v{filtroEstoqueNegativoPontoExposicao}".equals("") || !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
@@ -173,17 +223,17 @@ set colunaEstoquePontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals(
 set colunaUltimoInventarioEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
 	'qtdultinventario', u.ajustequantidade,
 """ : "'qtdultinventario', null,";
-set colunaProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
+set colunaProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroDiasComVenda}".equals("") ? """
 	'valorprecovenda', ppc.valorprecovenda,
 """ : "'valorprecovenda', null,";
 
 #########
 # Joins #
-set joinFiltroEstoque = !"$v{filtroLocalEstoque}".equals("") || !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
+set joinFiltroEstoque = !"$v{filtroLocalEstoque}".equals("") || !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") || !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroDiasComVenda}".equals("") || !"$v{filtroCurvaABC}".equals("") ? """
 	inner join estoquesaldoatual esa on (esa.idempresa = e.idempresa and esa.idproduto = p.idproduto)
 	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
 """ : "";
-set joinProdutoPontoExposicao = !"$v{filtroEstoqueZeroPontoExposicao}".equals("") || !"$v{filtroEstoqueNegativoPontoExposicao}".equals("") || !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
+set joinProdutoPontoExposicao = !'$v{pontoExposicao#}'.equals("") || !"$v{filtroEstoqueZeroPontoExposicao}".equals("") || !"$v{filtroEstoqueNegativoPontoExposicao}".equals("") || !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
 	inner join produtopontoexposicao ppe on (ppe.idproduto = p.idproduto and ppe.idempresa = e.idempresa)
 """ : "";
 set joinFiltroDiasSemVenda = !"$v{filtroDiasSemVenda}".equals("") ? """
@@ -196,10 +246,20 @@ set joinFiltroDiasSemVenda = !"$v{filtroDiasSemVenda}".equals("") ? """
 	left outer join metamercadologico mf on (mf.idmeta = $v{idMetaSemVendaFamilia#0} and mf.idmercadologico = cast(p.idfamilia as varchar(32))
 											and ms.idempresa = e.idempresa and mg.valor > 0. and current_date between mg.datainicial and mg.datafinal)
 """ : "";
+set joinFiltroDiasComVenda = !"$v{filtroDiasComVenda}".equals("") ? """
+	left outer join metamercadologico mcd on (mcd.idmeta = $v{idMetaComVendaDepartamento#0} and mcd.idmercadologico = cast(p.iddepartamento as varchar(32))
+											and mcd.idempresa = e.idempresa and mcd.valor > 0. and current_date between mcd.datainicial and mcd.datafinal)
+	left outer join metamercadologico mcs on (mcs.idmeta = $v{idMetaComVendaSetor#0} and mcs.idmercadologico = cast(p.idsetor as varchar(32))
+											and mcs.idempresa = e.idempresa and mcs.valor > 0. and current_date between mcs.datainicial and mcs.datafinal)
+	left outer join metamercadologico mcg on (mcg.idmeta = $v{idMetaComVendaGrupo#0} and mcg.idmercadologico = cast(p.idgrupo as varchar(32))
+											and mcg.idempresa = e.idempresa and mcg.valor > 0. and current_date between mcg.datainicial and mcg.datafinal)
+	left outer join metamercadologico mcf on (mcf.idmeta = $v{idMetaComVendaFamilia#0} and mcf.idmercadologico = cast(p.idfamilia as varchar(32))
+											and mcf.idempresa = e.idempresa and mcf.valor > 0. and current_date between mcf.datainicial and mcf.datafinal)
+""" : "";
 set joinUltimoInventarioEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
 	left join ultimoinventarioestoque u on (u.idproduto = x.idproduto and u.idempresa = x.idempresa)
 """ : "";
-set joinProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") ? """
+set joinProdutoPrecoCusto = !"$v{filtroDiasSemVenda}".equals("") || !"$v{filtroDiasComVenda}".equals("") ? """
 	left join produtoprecocusto ppc on (ppc.idproduto = x.idproduto and ppc.idempresa = x.idempresa)
 """ : "";
 
@@ -242,7 +302,6 @@ begin_transaction;
 				,null as classificacao
 				,null::numeric as qtdeabastecimento
 				,null as ruptura
-				,null::numeric as qtdultinventario
 				,null::numeric as qtdproducaobandeja
 				,null::numeric as percentualabastecimento
 				,null::numeric as capacidade
@@ -255,6 +314,7 @@ begin_transaction;
 				cross join empresa e
 				$v{joinFiltroEstoque}
 				$v{joinFiltroDiasSemVenda}
+				$v{joinFiltroDiasComVenda}
 				$v{joinProdutoPontoExposicao}
 			Where
 				p.situacao = 'A'
@@ -289,6 +349,9 @@ begin_transaction;
 				/* Filtros de Dias Sem Venda */
 				$v{filtroDiasSemVenda}
 
+				/* Filtros de Dias Com Venda */
+				$v{filtroDiasComVenda}
+
 				/* Filtros de Estoque */
 				$v{filtroLocalEstoque}
 				$v{filtroTipoLocalEstoque}
@@ -296,6 +359,14 @@ begin_transaction;
 				/* Filtros de Estoque Ponto de Exposição */
 				$v{filtroPontoExposicao}
 
+				/* Filtros de Peso Produto */
+				$v{filtroGeralPesoProduto}
+
+				/* Filtro Código de Barras */
+				$v{filtroPossuiCodigoBarras}
+
+				/* Filtro Livre */
+				$v{filtroLivre}
 			Group by
 				e.idempresa
 				,p.idproduto
@@ -328,7 +399,6 @@ begin_transaction;
 					'qtdeabastecimento', x.qtdeabastecimento,
 					'ruptura', x.ruptura,
 					'estoquequantidade', coalesce(x.estoquequantidade, x.estoquepontoexposicao),
-					'qtdultinventario', x.qtdultinventario,
 					'qtdproducaobandeja', x.qtdproducaobandeja,
 					'percentualabastecimento', x.percentualabastecimento,
 					'capacidade', x.capacidade
@@ -359,4 +429,4 @@ $include{
 	script:HEAVEN-wf-gera-wffilatrabalho-inicial-include, 
 	"execScript.getValueVar('WFOcorrencia_apelidoTarefaEncaminhamento')",
 	"execScript.getValueVar('WFProcessoEvento_idWFProcessoEvento')"
-}include
+}includeY

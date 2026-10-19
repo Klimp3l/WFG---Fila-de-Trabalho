@@ -1,4 +1,4 @@
-# versao 1.3
+# versao 1.4
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
@@ -6,6 +6,7 @@
 # | 06/08/2026 | Bernardo    | 		       | 	 	     | Incluídas colunas padrão da conferência de vencimento.
 # | 06/08/2026 | Bernardo    | 		       | 	 	     | Busca o tipo de situação da atividade no envio.
 # | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Ajustado a construção da consulta para busca dos dados do produto.
+# | 24/08/2026 | Bernardo    | Nathan      | 39425	     | Campo valor alterado conforme configurado na atividade realizada.
 
 <script_function name="getAtividades">
 	~write_exec_log;
@@ -165,15 +166,15 @@
 				'qtdestoquecorreta', wb.valores->>'qtdestoquecorreta',
 				'datavencimento', (
 					case
-						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{4}-\d{2}-\d{2}$'
-							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'yyyy-MM-dd'), 'dd/MM/yyyy')
-						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{2}/\d{2}/\d{4}$'
-							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'dd/MM/yyyy'), 'dd/MM/yyyy')
-						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{2}/\d{2}/\d{2}$'
-							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'dd/MM/yy'), 'dd/MM/yyyy')
-						when coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao') ~ '^\d{8}$'
-							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), 'ddMMyyyy'), 'dd/MM/yyyy')
-						else nullif(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento', wb.valores->>'datavencimentoinclusao'), '')
+						when coalesce(wb.valores->>'datavencimentoinclusao', wb.chaves->>'datavencimento') ~ '^\d{4}-\d{2}-\d{2}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento'), 'yyyy-MM-dd'), 'dd/MM/yyyy')
+						when coalesce(wb.valores->>'datavencimentoinclusao', wb.chaves->>'datavencimento') ~ '^\d{2}/\d{2}/\d{4}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento'), 'dd/MM/yyyy'), 'dd/MM/yyyy')
+						when coalesce(wb.valores->>'datavencimentoinclusao', wb.chaves->>'datavencimento') ~ '^\d{2}/\d{2}/\d{2}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento'), 'dd/MM/yy'), 'dd/MM/yyyy')
+						when coalesce(wb.valores->>'datavencimentoinclusao', wb.chaves->>'datavencimento') ~ '^\d{8}$'
+							then to_char(to_date(coalesce(wb.valores->>'datavencimento', wb.chaves->>'datavencimento'), 'ddMMyyyy'), 'dd/MM/yyyy')
+						else nullif(coalesce(wb.valores->>'datavencimentoinclusao', wb.chaves->>'datavencimento'), '')
 					end
 				),
 				'dataprevisaosaida', (wb.valores->>'dataprevisaosaida')::varchar,
@@ -182,13 +183,8 @@
 				'qtdeabastecer', wb.valores->>'ruptura',
 				'saldoestoquedataproxima', wb.valores->>'saldoestoquedataproxima',
 				'diasparavencimento', coalesce(
-					wb.valores->>'diasparavencimento',
-					(
-						coalesce(
-							nullif(wb.chaves->>'datavencimento', ''),
-							nullif(wb.valores->>'datavencimentoinclusao', '')
-						)::date - current_date
-					)::varchar
+					((wb.chaves->>'datavencimento')::date - current_date)::varchar,
+					'0'
 				),
 				'qtdrevisada', wb.valores->>'qtdrevisada',
 				'datavencimentorevisada', (
@@ -221,7 +217,7 @@
 						'idwfatividaderealizada', ar.idwfatividaderealizada,
 						'atividaderealizada', ar.descricao || coalesce(' -> ' || a2.descricao, ''),
 						'tiposituacao', ar.tiposituacao,
-						'nomeCampoDigital', lower(nullif(trim(ar.nomecampodigital), '')),
+						'nomeCampoDigital', nullif(trim(ar.nomecampodigital), ''),
 						'valorDefaultCampoDigital', ar.valordefaultcampodigital
 					)
 				) as atividadeselegiveis
@@ -421,7 +417,7 @@
 					def statement = execScript.getConnection().prepareStatement('''
 						select
 							tiposituacao,
-							lower(nullif(trim(nomecampodigital), '')) as nomecampodigital
+							nullif(trim(nomecampodigital), '') as nomecampodigital
 						from wfatividaderealizada
 						where idwfatividaderealizada = ?
 					''');
@@ -510,7 +506,7 @@
 
 		execScript.addVar('response', response);
 		execScript.addVar('hasAtividadeFinalizacao', hasAtividadeFinalizacao);
-		execScript.addVar('idWFFilatrabalho', idWFFilatrabalhoFinalizacao.toString());
+		// # execScript.addVar('idWFFilatrabalho', idWFFilatrabalhoFinalizacao.toString());
 
 		return true;
 	</script_java_groovy>

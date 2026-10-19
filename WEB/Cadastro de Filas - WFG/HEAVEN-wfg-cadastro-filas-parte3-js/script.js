@@ -236,7 +236,7 @@ const store = new Vue({
 				disabled: false,
 			}
 		]
-	}
+	},
 </script_content>
 
 <script_content name="scriptAtividadeRealizadaFinalizacaoFilters">
@@ -263,6 +263,20 @@ const store = new Vue({
 				label: "Venda Dia Anterior",
 				type: "checkbox",
 				placeholder: "Venda Dia Anterior",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+		],
+	},
+	{
+		label: "Produto",
+		items: [
+			{
+				key: "naoPossuiCodigoBarras",
+				label: "Não possui Codigo de Barras",
+				type: "checkbox",
+				placeholder: "Não possui Codigo de Barras",
 				optional: true,
 				default: false,
 				disabled: false,
@@ -475,6 +489,111 @@ const store = new Vue({
 	},
 </script_content>
 
+<script_content name="scriptDiasComVendaFilters">
+	{
+		label: "Dias Com Venda",
+		items: [
+			{
+				key: "diasComVenda",
+				label: "Dias Com Venda",
+				type: "number",
+				placeholder: "Selecione os dias com venda",
+				optional: true,
+				default: null,
+				disabled: false,
+				min: 0,
+			},
+			{
+				key: "utilizaMetaDiasComVenda",
+				label: "Utiliza Meta de Dias Com Venda",
+				type: "checkbox",
+				placeholder: "Utiliza Meta de Dias Com Venda",
+				optional: true,
+				default: false,
+				disabled: false
+			},
+			{
+				key: "idMetaComVendaDepartamento",
+				label: "Meta do Departamento de Com Venda",
+				type: "select",
+				options: '$$store.optionsMetas',
+				placeholder: "Selecione a meta do departamento de com venda",
+				optional: true,
+				default: null,
+				disabled: false,
+				vShow: "utilizaMetaDiasComVenda"
+			},
+			{
+				key: "idMetaComVendaSetor",
+				label: "Meta do Setor de Com Venda",
+				type: "select",
+				options: '$$store.optionsMetas',
+				placeholder: "Selecione a meta do setor de com venda",
+				optional: true,
+				default: null,
+				disabled: false,
+				vShow: "utilizaMetaDiasComVenda"
+			},
+			{
+				key: "idMetaComVendaGrupo",
+				label: "Meta do Grupo de Com Venda",
+				type: "select",
+				options: '$$store.optionsMetas',
+				placeholder: "Selecione a meta do grupo de com venda",
+				optional: true,
+				default: null,
+				disabled: false,
+				vShow: "utilizaMetaDiasComVenda"
+			},
+			{
+				key: "idMetaComVendaFamilia",
+				label: "Meta da Família de Com Venda",
+				type: "select",
+				options: '$$store.optionsMetas',
+				placeholder: "Selecione a meta da família de com venda",
+				optional: true,
+				default: null,
+				disabled: false,
+				vShow: "utilizaMetaDiasComVenda"
+			}
+		]
+	},
+</script_content>
+
+<script_content name="scriptPesoProdutoFilters">
+	{
+		label: "Peso do Produto",
+		items: [
+			{
+				key: "pesobrutoFiltro",
+				label: "Peso Bruto",
+				type: "select",
+				options: [
+					{ value: "EQ_ZERO", label: "= 0" },
+					{ value: "GT_ZERO", label: "> 0" }
+				],
+				placeholder: "Selecione o filtro de peso bruto",
+				optional: true,
+				default: null,
+				disabled: false,
+			},
+			{
+				key: "pesoliquidoFiltro",
+				label: "Peso Líquido",
+				type: "select",
+				options: [
+					{ value: "EQ_ZERO", label: "= 0" },
+					{ value: "GT_ZERO", label: "> 0" }
+				],
+				placeholder: "Selecione o filtro de peso líquido",
+				optional: true,
+				default: null,
+				disabled: false,
+			}
+		]
+	},
+</script_content>
+
 <script_content name="scriptBasicFilters">
 	{
 		label: "Ocorrência",
@@ -488,6 +607,20 @@ const store = new Vue({
 				default: true,
 				disabled: false,
 			},
+		]
+	},
+	{
+		label: "Produto",
+		items: [
+			{
+				key: "possuiCodigoBarras",
+				label: "Possui Codigo de Barras",
+				type: "checkbox",
+				placeholder: "Possui Codigo de Barras",
+				optional: true,
+				default: false,
+				disabled: false,
+			}
 		]
 	},
 	{
@@ -519,6 +652,15 @@ const store = new Vue({
 		label: "Mercadológicos",
 		items: [
 			{
+				key: "ignorarDepartamento",
+				label: "Ignorar Departamento",
+				type: "checkbox",
+				placeholder: "Ignorar Departamento",
+				optional: true,
+				default: false,
+				disabled: false,
+			},
+			{
 				label: "Departamento",
 				key: "departamento",
 				type: "select",
@@ -530,10 +672,10 @@ const store = new Vue({
 				disabled: false,
 			},
 			{
-				key: "ignorarDepartamento",
-				label: "Ignorar Departamento",
+				key: "ignorarSetor",
+				label: "Ignorar Setor",
 				type: "checkbox",
-				placeholder: "Ignorar Departamento",
+				placeholder: "Ignorar Setor",
 				optional: true,
 				default: false,
 				disabled: false,
@@ -550,10 +692,10 @@ const store = new Vue({
 				disabled: false,
 			},
 			{
-				key: "ignorarSetor",
-				label: "Ignorar Setor",
+				key: "ignorarGrupo",
+				label: "Ignorar Grupo",
 				type: "checkbox",
-				placeholder: "Ignorar Setor",
+				placeholder: "Ignorar Grupo",
 				optional: true,
 				default: false,
 				disabled: false,
@@ -570,10 +712,10 @@ const store = new Vue({
 				disabled: false,
 			},
 			{
-				key: "ignorarGrupo",
-				label: "Ignorar Grupo",
+				key: "ignorarFamilia",
+				label: "Ignorar Família",
 				type: "checkbox",
-				placeholder: "Ignorar Grupo",
+				placeholder: "Ignorar Família",
 				optional: true,
 				default: false,
 				disabled: false,
@@ -589,15 +731,24 @@ const store = new Vue({
 				default: null,
 				disabled: false,
 			},
+		]
+	},
+</script_content>
+
+<script_content name="scriptFiltroLivreFilters">
+	{
+		label: "Filtro Livre",
+		items: [
 			{
-				key: "ignorarFamilia",
-				label: "Ignorar Família",
-				type: "checkbox",
-				placeholder: "Ignorar Família",
+				key: "filtroLivre",
+				label: "Condição SQL",
+				type: "textarea",
+				rows: 4,
+				placeholder: "Use p (produto) e e (empresa). Ex.: substring(p.codigobarras, 1, 3) <> '981'",
 				optional: true,
-				default: false,
+				default: null,
 				disabled: false,
-			},
+			}
 		]
 	},
 </script_content>

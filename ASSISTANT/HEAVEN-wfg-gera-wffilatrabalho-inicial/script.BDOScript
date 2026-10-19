@@ -39,9 +39,9 @@ begin_transaction;
 			,a.idwfatividade
 			,o.idempresa
 			,'$v{dataAtual}'::date datainclusao
-			,'$v{dataAtual"datetime:HH:mm:ss"}'::text horainclusao
+			,'$v{dataAtual"datetime:HH:mm:ss"}'::varchar(8) horainclusao
 			,$v{execId} idtarefaexecucaoinclusao
-			,now() + (
+			,(now() + (
 				Case a.tipotempoexpiracao
 					when 'MINUTO' then a.tempoexpiracao * interval '1 minute'
 					when 'HORA' then a.tempoexpiracao * interval '1 hour'
@@ -50,8 +50,8 @@ begin_transaction;
 					when 'MES' then a.tempoexpiracao * interval '1 month'
 					else null
 				end
-			)::date as dataexpiracao
-			,now() + (
+			))::date as dataexpiracao
+			,((now() + (
 				Case a.tipotempoexpiracao
 					when 'MINUTO' then a.tempoexpiracao * interval '1 minute'
 					when 'HORA' then a.tempoexpiracao * interval '1 hour'
@@ -60,7 +60,7 @@ begin_transaction;
 					when 'MES' then a.tempoexpiracao * interval '1 month'
 					else null
 				end
-			end)::time as horaexpiracao
+			))::time)::varchar(8) as horaexpiracao
 		From 
 			wfocorrencia o 
 			inner join wfprocessoevento pe on pe.idwfprocessoevento = o.idwfprocessoevento

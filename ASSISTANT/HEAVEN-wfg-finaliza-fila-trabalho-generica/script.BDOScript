@@ -23,6 +23,9 @@ Select
 	,'$v{estoquePositivo#false}' as "estoquePositivo"
 	,'$v{estoquePositivoPontoExposicao#false}' as "estoquePositivoPontoExposicao"
 	,'$v{pontoExposicao#}' as "pontoExposicao"
+	,'$v{pesobrutoFiltro#}' as "pesobrutoFiltro"
+	,'$v{pesoliquidoFiltro#}' as "pesoliquidoFiltro"
+	,'$v{naoPossuiCodigoBarras#false}' as "naoPossuiCodigoBarras"
 save_rows(1,1);
 
 #############################
@@ -36,23 +39,41 @@ set filtroVendaDiaAnterior = '$v{vendaDiaAnterior#false}'.equals("false") ? "" :
 		and pr.dataultimavenda >= (current_date - 1)
 )";
 
+##################
+# Filtros de Peso #
+set filtroPesoBruto = '$v{pesobrutoFiltro#}'.equals("") ? "" : ('$v{pesobrutoFiltro#}'.equals("EQ_ZERO") ? "or coalesce(p.pesobruto, 0) = 0" : ('$v{pesobrutoFiltro#}'.equals("GT_ZERO") ? "or coalesce(p.pesobruto, 0) > 0" : ""));
+set filtroPesoLiquido = '$v{pesoliquidoFiltro#}'.equals("") ? "" : ('$v{pesoliquidoFiltro#}'.equals("EQ_ZERO") ? "or coalesce(p.pesoliquido, 0) = 0" : ('$v{pesoliquidoFiltro#}'.equals("GT_ZERO") ? "or coalesce(p.pesoliquido, 0) > 0" : ""));
+
+set filtroGeralPesoProduto = !"$v{filtroPesoBruto}".equals("") || !"$v{filtroPesoLiquido}".equals("") ? """
+	and (
+		1=0
+		$v{filtroPesoBruto}
+		$v{filtroPesoLiquido}
+	)
+""" : "";
+
+############################
+# Filtro Código de Barras #
+set filtroNaoPossuiCodigoBarras = '$v{naoPossuiCodigoBarras#false}'.equals("false") ? "" : "or coalesce(p.codigobarras, 0) = 0";
+
 ###########
 # Estoque #
 set filtroEstoqueZero = '$v{estoqueZero#false}'.equals("false") ? "" : "or sum(esa.quantidade) = 0.";
 set filtroEstoqueNegativo = '$v{estoqueNegativo#false}'.equals("false") ? "" : "or sum(esa.quantidade) < 0.";
 set filtroEstoquePositivo = '$v{estoquePositivo#false}'.equals("false") ? "" : "or sum(esa.quantidade) > 0.";
-set filtroGeralEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
+set filtroEstoquePositivoPontoExposicao = '$v{estoquePositivoPontoExposicao#false}'.equals("false") ? "" : "or sum(ppe.quantidadeestoque) > 0.";
+set filtroGeralEstoque = !"$v{filtroEstoquePositivoPontoExposicao}".equals("") || !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqueNegativo}".equals("") || !"$v{filtroEstoquePositivo}".equals("") ? """
 	and (
 		1=0
 		$v{filtroEstoqueZero}
 		$v{filtroEstoqueNegativo}
 		$v{filtroEstoquePositivo}
+		$v{filtroEstoquePositivoPontoExposicao}
 	)
 """ : "";
 
 ######################
 # Ponto de Exposição #
-set filtroEstoquePositivoPontoExposicao = '$v{estoquePositivoPontoExposicao#false}'.equals("false") ? "" : "and sum(ppe.quantidadeestoque) > 0.";
 set filtroPontoExposicao = '$v{pontoExposicao#}'.equals("") ? "" : "and ppe.idpontoexposicao in ($v{pontoExposicao#})";
 
 #########
@@ -61,7 +82,7 @@ set joinFiltroEstoque = !"$v{filtroEstoqueZero}".equals("") || !"$v{filtroEstoqu
 	inner join estoquesaldoatual esa on (esa.idempresa = x.idempresa and esa.idproduto = p.idproduto)
 	inner join estoquelocal el on (el.idlocalestoque = esa.idlocalestoque)
 """ : "";
-set joinProdutoPontoExposicao = !"$v{filtroEstoquePositivoPontoExposicao}".equals("") ? """
+set joinProdutoPontoExposicao = !"$v{filtroEstoquePositivoPontoExposicao}".equals("") || !"$v{filtroPontoExposicao}".equals("") ? """
 	inner join produtopontoexposicao ppe on (ppe.idproduto = p.idproduto and ppe.idempresa = x.idempresa)
 """ : "";
 
@@ -116,14 +137,21 @@ begin_transaction;
 
 				/* Filtros de Dias Sem Venda */
 				$v{filtroVendaDiaAnterior}
+
+				/* Filtros de Peso */
+				$v{filtroGeralPesoProduto}
 				
 				/* Filtros de Estoque Ponto de Exposição */
 				$v{filtroPontoExposicao}
+
+				/* Filtro Não possui Código de Barras */
+				$v{filtroNaoPossuiCodigoBarras}
 			Group by
 				x.idempresa
 				,x.idproduto
 				,x.idwfocorrencia
 				,x.idwffilatrabalho
+				,p.codigobarras
 			Having
 				1=1
 
@@ -132,6 +160,9 @@ begin_transaction;
 
 				/* Filtros de Estoque Ponto de Exposição */
 				$v{filtroEstoquePositivoPontoExposicao}
+
+				/* Filtro Não possui Código de Barras */
+				$v{filtroNaoPossuiCodigoBarras}
 		)
 	Insert into WFFilatrabalho
 		(idwfocorrencia, idempresa, idwfatividade, idwfatividaderealizada, idwffilatrabalhoanterior, observacao, datainclusao, horainclusao, idtarefaexecucaoinclusao, idtarefaexecucaoatividaderealizada)

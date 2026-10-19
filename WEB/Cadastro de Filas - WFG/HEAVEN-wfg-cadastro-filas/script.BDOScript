@@ -4,7 +4,13 @@
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição
 # | 27/04/2026 | Bernardo    | IANDev      |             | Criação da estrutura inicial do cadastro WEB de filas WFG.
 
-// Auxiliares: getProcessos, getEmpresas, getMercadologicos
+#connect $v{ds_bridge};
+#
+#sql SELECT audit.audit_table('wfgtarefa');
+#sql SELECT audit.audit_table('wfocorrencia');
+#sql SELECT audit.audit_table('wffilatrabalho');
+
+#// Auxiliares: getProcessos, getEmpresas, getMercadologicos
 $include{script:HEAVEN-wfg-cadastro-filas-parte2}include
 
 <script_function name="getList">
@@ -268,21 +274,6 @@ $include{script:HEAVEN-wfg-cadastro-filas-parte2}include
 	
 	set msg1 = "Fluxo salvo com sucesso";
 	set msg2 = "Não foi possível salvar o fluxo";
-
-#	sql_exec CREATE SEQUENCE if not exists public.seq_idwfgtarefa;
-#	sql_exec create table if not exists WfgTarefa (
-#        idWfgTarefa INTEGER NOT NULL DEFAULT nextval('public.seq_idwfgtarefa'),
-#        apelidoTarefa VARCHAR(256) NOT NULL,
-#        apelidoTarefaMae VARCHAR(256) NOT NULL,
-#        ordemExecucao INTEGER NOT NULL,
-#        dataAlteracao DATE NOT NULL,
-#        horaAlteracao VARCHAR(8) NOT NULL,
-#        idUsuarioAlteracao INTEGER,
-#        jsonbParametros VARCHAR(12345) NOT NULL,
-#        CONSTRAINT wfgtarefa_pk PRIMARY KEY (idWfgTarefa )
-#	);
-#	sql_exec ALTER TABLE WfgTarefa alter column jsonbParametros type jsonb using jsonbParametros::jsonb;
-#	sql_exec  ALTER SEQUENCE public.seq_idwfgtarefa OWNED BY public.WfgTarefa.idWfgTarefa;
 
 	begin_transaction;
 		sql_exec SET LOCAL var.exec_id = '$v{execId}';

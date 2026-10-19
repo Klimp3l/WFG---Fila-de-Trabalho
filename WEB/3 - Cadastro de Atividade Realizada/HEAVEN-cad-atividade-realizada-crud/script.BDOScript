@@ -1,5 +1,5 @@
 ~not_save_exec;
-# versao 2.3
+# versao 2.4
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
@@ -8,7 +8,7 @@
 # | 26/04/2017 | Lucas       |             |             | Corrigido coluna node
 # | 23/05/2018 | Giovani     |             |             | Alterado ID de edges da classe alert.
 # | 10/06/2026 | Bernardo    |             | 38953       | Adicionado colunas idwfatividadeinicialtransferir e idwfprocessoeventotransferir.
-
+# | 24/08/2026 | Bernardo    | Nathan      | 39425	     | Campo valor alterado conforme configurado na atividade realizada.
 
 connect $v{ds_bridge};
 
@@ -29,6 +29,8 @@ if "$v{_action#}".equals("list") ;
 		ar.idwfprocessoeventotransferir,
 		ar.idusuarioalteracao,
 		ar.descricao,
+		ar.nomecampodigital,
+		ar.valordefaultcampodigital,
 		a.idwfatividade,
 		a.descricao wfatividade,
 		pa.idwfatividade idwfatividadeproxima,
@@ -178,7 +180,7 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 	set run = ""+execScript.normalizeVars("integer", [ "_id" ] as String[]);
 	set msg1 = "Atividade gravada com sucesso.";
 	set msg2 = "Erro ao gravar Atividade.";
-	set response = new bdo.util.SQLUtilX('wfatividaderealizada', 'descricao, idwfprocesso, idwfatividade, idwfatividadeproxima, idwfatividadeinicialtransferir, idwfprocessoeventotransferir, tiposituacao, idareaempresa, idwfcausa, idwfimpacto, dataalteracao, idusuarioalteracao', 'idwfatividaderealizada')
+	set response = new bdo.util.SQLUtilX('wfatividaderealizada', 'descricao, idwfprocesso, idwfatividade, idwfatividadeproxima, idwfatividadeinicialtransferir, idwfprocessoeventotransferir, tiposituacao, idareaempresa, idwfcausa, idwfimpacto, dataalteracao, idusuarioalteracao, nomecampodigital, valordefaultcampodigital', 'idwfatividaderealizada')
 								   	.setConnectionX(execScript.getConnection())
 								   	.setString('$v{descricao}')
 								   	.setInt('$v{idwfprocesso}')
@@ -192,6 +194,8 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 								   	.setInt('$v{idwfimpacto#}')
 									.setDate('$v{dataAtual}')
 									.setInt($v{idUsuario})
+								   	.setString('$v{nomecampodigital}')
+								   	.setString('$v{valordefaultcampodigital}')
 								   	.setIntPK($v{_id})
 								   	.insertOrUpdate('$v{msg1}', '$v{msg2}');
 end_if ;
