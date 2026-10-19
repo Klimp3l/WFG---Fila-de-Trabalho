@@ -1,4 +1,4 @@
-# versao 1.4
+# versao 1.5
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
@@ -7,6 +7,7 @@
 # | 06/08/2026 | Bernardo    | 		       | 	 	     | Busca o tipo de situação da atividade no envio.
 # | 17/08/2026 | Bernardo    | Nathan      | 39425	     | Ajustado a construção da consulta para busca dos dados do produto.
 # | 24/08/2026 | Bernardo    | Nathan      | 39425	     | Campo valor alterado conforme configurado na atividade realizada.
+# | 19/10/2026 | IANDev      |             |             | Retorna camposusoaplicacao da atividade para o aplicativo.
 
 <script_function name="getAtividades">
 	~write_exec_log;
@@ -30,6 +31,7 @@
 			trim(p.descricao) as wfprocesso,
 			a.idwfatividade as idwfatividade,
 			trim(a.descricao) as wfatividade,
+			a.camposusoaplicacao as camposusoaplicacao,
 			ft.idwffilatrabalho,
 			ft.idwffilatrabalhoanterior,
 			ft.idwfocorrencia,
@@ -64,6 +66,7 @@
 		wb.wfprocesso as wfprocesso,
 		wb.idwfatividade as idwfatividade,
 		wb.wfatividade as wfatividade,
+		wb.camposusoaplicacao as camposusoaplicacao,
 		json_agg(
 			(
 			jsonb_build_object(
@@ -344,6 +347,7 @@
 		,wb.wfprocesso
 		,wb.idwfatividade
 		,wb.wfatividade
+		,wb.camposusoaplicacao
 	order by
 		wb.wfprocesso
 		,wb.wfatividade

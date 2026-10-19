@@ -1,10 +1,11 @@
-# versao 1.2
+# versao 1.3
 
 # Alterações:
 # |    Data    | Programador | Solicitante | Caso Mantis | Descrição 
 # | xx/xx/xxxx | xxxxx       | xxxxx       | xxxxxx      | Criação.
 # | 13/07/2022 | Bernardo    | Elcio       | 27258       | Adicionado para salvar os LOGS das alterações.
 # | 21/08/2023 | Bernardo    | Elcio       | 31091       | Atividado novo modo de log;
+# | 19/10/2026 | IANDev      |             |             | Grava e replica camposusoaplicacao das colunas do aplicativo.
 
 connect $v{ds_bridge};
 
@@ -132,6 +133,7 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 	commit;
 	
 	<script_java_groovy name="script1">
+		import groovy.json.JsonOutput;
 		import groovy.json.JsonSlurper;
 		import bdo.util.SQLUtilX;
 		import java.sql.Connection;
@@ -143,6 +145,33 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 
 		def sql = new Sql(execScript.getConnection());
 		sql.executeUpdate("SET LOCAL var.logged_user = '${execScript.getValueVar('usuario')}'");
+
+		def normalizeCamposUsoAplicacao = { String raw ->
+			if (raw == null || raw.trim().isEmpty()) {
+				return null;
+			}
+			def parsed = new JsonSlurper().parseText(raw);
+			if (!(parsed instanceof List) || parsed.isEmpty()) {
+				return null;
+			}
+			def normalized = [];
+			def seen = [] as Set;
+			parsed.each { item ->
+				def campo = item?.campo?.toString()?.trim();
+				if (!campo) {
+					return;
+				}
+				def key = campo.toLowerCase();
+				if (seen.contains(key)) {
+					return;
+				}
+				seen.add(key);
+				def visualValue = item?.visual;
+				def visual = visualValue == true || visualValue?.toString() == 'S' || visualValue?.toString()?.equalsIgnoreCase('true');
+				normalized << [campo: key, visual: visual];
+			}
+			return normalized.isEmpty() ? null : JsonOutput.toJson(normalized);
+		};
 		
 		def objArray = new JsonSlurper().parseText(execScript.getValueVar('AtividadeColaborador'));
 		String response;
@@ -191,6 +220,12 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 			return false;
 		}
 
+		String camposUsoAplicacaoJson = normalizeCamposUsoAplicacao(execScript.getValueVar('CamposUsoAplicacao'));
+		sql.executeUpdate(
+			"update wfatividade set camposusoaplicacao = cast(? as jsonb) where idwfatividade = ?",
+			[camposUsoAplicacaoJson, idwfatividade]
+		);
+
 		SQLUtilX sqlUtilX = new SQLUtilX('wfatividadecolaborador', 'idwfatividade, idcolaborador, idfuncao, idempresa, tipo, tempomonitoramento, ignoraempresawfatividadecolaborador', 'idwfatividadecolaborador');
 		sqlUtilX.setConnectionX(execScript.getConnection())
 				.setNotInsertPKX(true);
@@ -222,6 +257,66 @@ if "$v{_action#}".equals("insert") || "$v{_action#}".equals("update") ;
 			
 		execScript.addVar('response', response);
 
+		return true;
+	</script_java_groovy>
+
+end_if ;
+
+if "$v{_action#}".equals("replicar-colunas") ;
+	set msg1 = "Colunas replicadas para as demais atividades do processo.";
+	set msg2 = "Erro ao replicar colunas da atividade.";
+
+	~write_exec_log;
+
+	begin_transaction;
+		run_script_java_groovy scriptReplicarColunas;
+	commit;
+
+	<script_java_groovy name="scriptReplicarColunas">
+		import groovy.json.JsonOutput;
+		import groovy.json.JsonSlurper;
+		import groovy.sql.Sql;
+
+		def sql = new Sql(execScript.getConnection());
+		sql.executeUpdate("SET LOCAL var.logged_user = '${execScript.getValueVar('usuario')}'");
+
+		def normalizeCamposUsoAplicacao = { String raw ->
+			if (raw == null || raw.trim().isEmpty()) {
+				return null;
+			}
+			def parsed = new JsonSlurper().parseText(raw);
+			if (!(parsed instanceof List) || parsed.isEmpty()) {
+				return null;
+			}
+			def normalized = [];
+			def seen = [] as Set;
+			parsed.each { item ->
+				def campo = item?.campo?.toString()?.trim();
+				if (!campo) {
+					return;
+				}
+				def key = campo.toLowerCase();
+				if (seen.contains(key)) {
+					return;
+				}
+				seen.add(key);
+				def visualValue = item?.visual;
+				def visual = visualValue == true || visualValue?.toString() == 'S' || visualValue?.toString()?.equalsIgnoreCase('true');
+				normalized << [campo: key, visual: visual];
+			}
+			return normalized.isEmpty() ? null : JsonOutput.toJson(normalized);
+		};
+
+		int idwfatividade = execScript.getValueVarAsInt('_id');
+		int idwfprocesso = execScript.getValueVarAsInt('idwfprocesso');
+		String camposUsoAplicacaoJson = normalizeCamposUsoAplicacao(execScript.getValueVar('CamposUsoAplicacao'));
+		sql.executeUpdate(
+			"update wfatividade set camposusoaplicacao = cast(? as jsonb) where idwfprocesso = ? and idwfatividade <> ?",
+			[camposUsoAplicacaoJson, idwfprocesso, idwfatividade]
+		);
+
+		String response = "{\"status\":\"success\",\"message\":\"" + execScript.getValueVar('msg1') + "\"}";
+		execScript.addVar('response', response);
 		return true;
 	</script_java_groovy>
 

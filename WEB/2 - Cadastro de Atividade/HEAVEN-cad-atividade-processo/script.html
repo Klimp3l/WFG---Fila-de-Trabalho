@@ -53,6 +53,7 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 					var record = this.get(event.recid);
 					displayData(record);
 					displayAtividadeColaborador(record);
+					displayCamposUsoAplicacao(record);
 				},
 				onToolbar: function(event) {
 					var id = event.target;
@@ -73,6 +74,9 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 			    $("#_id").val("");
 			    clearValues();
 			    $(odwW2UIGridOptions.firstFocusInput).focus();
+			    if (w2ui.w2uiGridColunas) {
+			    	w2ui.w2uiGridColunas.clear();
+			    }
 			}
 
 			$("#form1").validate({
@@ -95,7 +99,7 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 			        type: "POST",
 			        dataType: "json",
 			        url: "odwctrl?action=execTarefa&ajax=true&idTarefa=" + odwW2UIGridOptions.idTarefaCRUD + "&_action=" + action,
-			        data: $("#form1").serialize() + "&AtividadeColaborador=" + JSON.stringify(w2ui.w2uiGridAC.records), 
+			        data: $("#form1").serialize() + "&AtividadeColaborador=" + JSON.stringify(w2ui.w2uiGridAC.records) + "&CamposUsoAplicacao=" + encodeURIComponent(JSON.stringify(getCamposUsoAplicacaoPayload())), 
 			        contentType: "application/x-www-form-urlencoded; " + odwW2UIGridOptions.ajaxCharset,
 			        success: function(response) {
 			            showResponse(response);
@@ -229,6 +233,258 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 				return list;
 			}
 
+			$> sb.append(colunasAplicativo());
+		});
+	</script>
+
+<script_content name="colunasAplicativo">
+			/* Manter alinhado com groupcolumns de HEAVEN-wfg-fila-trabalho-mobile-backend. */
+			var COLUNAS_APLICATIVO = [
+				{ campo: "produto", label: "Produto", grupo: "Produto" },
+				{ campo: "idproduto", label: "ID Produto", grupo: "Produto" },
+				{ campo: "codigobarras", label: "Código barras", grupo: "Produto" },
+				{ campo: "classe", label: "Classe", grupo: "Produto" },
+				{ campo: "fornecedor", label: "Fornecedor", grupo: "Produto" },
+				{ campo: "departamento", label: "Departamento", grupo: "Mercadológicos" },
+				{ campo: "setor", label: "Setor", grupo: "Mercadológicos" },
+				{ campo: "grupo", label: "Grupo", grupo: "Mercadológicos" },
+				{ campo: "familia", label: "Família", grupo: "Mercadológicos" },
+				{ campo: "datainclusao", label: "Data Inclusão", grupo: "Datas" },
+				{ campo: "diassemvenda", label: "Dias sem venda", grupo: "Datas" },
+				{ campo: "diasentrada", label: "Dias entrada", grupo: "Datas" },
+				{ campo: "dataultimavenda", label: "Data última venda", grupo: "Datas" },
+				{ campo: "dataultimaentrada", label: "Data última entrada", grupo: "Datas" },
+				{ campo: "datavalidade", label: "Data validade", grupo: "Datas" },
+				{ campo: "datavencimento", label: "Dt. Venc.", grupo: "Datas" },
+				{ campo: "diasparavencimento", label: "Dias p/ Venc.", grupo: "Datas" },
+				{ campo: "datavencimentorevisada", label: "Dt. Venc. Revisada", grupo: "Datas" },
+				{ campo: "valorprecovenda", label: "Valor preço venda", grupo: "Valores" },
+				{ campo: "valorcustoaquisicao", label: "Valor custo aquisição", grupo: "Valores" },
+				{ campo: "qtdultimaentrada", label: "Quantidade última entrada", grupo: "Quantidade" },
+				{ campo: "qtdeultimavenda", label: "Quantidade última venda", grupo: "Quantidade" },
+				{ campo: "qtdvendamedia", label: "Quantidade venda média", grupo: "Quantidade" },
+				{ campo: "qtdproducaobandeja", label: "Quantidade produção bandeja", grupo: "Quantidade" },
+				{ campo: "capacidade", label: "Capacidade", grupo: "Quantidade" },
+				{ campo: "qtdunentrada", label: "Quantidade unidade entrada", grupo: "Quantidade" },
+				{ campo: "qtdproduzido", label: "Quantidade produzido", grupo: "Quantidade" },
+				{ campo: "qtdrevisada", label: "Qtd. Revisada", grupo: "Quantidade" },
+				{ campo: "qtdvendidoaposconferencia", label: "Qtd. Vendido Após Conf.", grupo: "Quantidade" },
+				{ campo: "qtdestoqueatual", label: "Est. Atual", grupo: "Estoque" },
+				{ campo: "saldoestoquedataproxima", label: "Saldo Est. (Dt. Próx.)", grupo: "Estoque" },
+				{ campo: "estoquequantidade", label: "Estoque quantidade", grupo: "Estoque" },
+				{ campo: "percentualabastecimento", label: "Percentual abastecimento", grupo: "Estoque" },
+				{ campo: "qtdeabastecer", label: "Quantidade abastecer", grupo: "Estoque" },
+				{ campo: "qtdultinventario", label: "Quantidade último inventário", grupo: "Estoque" },
+				{ campo: "qtdestoqueatualcd", label: "Estoque atual CD", grupo: "Estoque" },
+				{ campo: "qtdestoquecorreta", label: "Quantidade estoque correto", grupo: "Estoque" }
+			];
+			var visualColunaAplicativo = [{ id: "S", text: "Sim" }, { id: "N", text: "Não" }];
+			var catalogoColunaPorCampo = {};
+			for (var indiceColuna = 0; indiceColuna < COLUNAS_APLICATIVO.length; indiceColuna++) {
+				catalogoColunaPorCampo[COLUNAS_APLICATIVO[indiceColuna].campo] = COLUNAS_APLICATIVO[indiceColuna];
+			}
+
+			function parseCamposUsoAplicacao(raw) {
+				if (raw == null || raw === "") {
+					return [];
+				}
+				var value = raw;
+				if (typeof value === "string") {
+					try {
+						value = JSON.parse(value);
+					} catch (error) {
+						return [];
+					}
+				}
+				if (value && typeof value === "object" && !$.isArray(value) && typeof value.value === "string") {
+					return parseCamposUsoAplicacao(value.value);
+				}
+				if (!$.isArray(value)) {
+					return [];
+				}
+				var items = [];
+				for (var i = 0; i < value.length; i++) {
+					var item = value[i] || {};
+					var campo = $.trim(String(item.campo || item.key || "")).toLowerCase();
+					if (!campo || !catalogoColunaPorCampo[campo]) {
+						continue;
+					}
+					var visual = item.visual === true || item.visual === "S" || item.visual === "true";
+					items.push({ campo: campo, visual: visual });
+				}
+				return items;
+			}
+
+			function getCamposUsoAplicacaoPayload() {
+				if (w2ui.w2uiGridColunas) {
+					w2ui.w2uiGridColunas.mergeChanges();
+				}
+				var records = w2ui.w2uiGridColunas ? w2ui.w2uiGridColunas.records : [];
+				var payload = [];
+				for (var i = 0; i < records.length; i++) {
+					var campo = records[i].campo;
+					if (!campo || !catalogoColunaPorCampo[campo]) {
+						continue;
+					}
+					payload.push({
+						campo: campo,
+						visual: records[i].visual === "S" || records[i].visual === true
+					});
+				}
+				return payload;
+			}
+
+			function displayCamposUsoAplicacao(record) {
+				w2ui.w2uiGridColunas.clear();
+				var items = parseCamposUsoAplicacao(record && (record.camposusoaplicacao || record.camposUsoAplicacao));
+				for (var i = 0; i < items.length; i++) {
+					var catalogo = catalogoColunaPorCampo[items[i].campo];
+					w2ui.w2uiGridColunas.add({
+						recid: catalogo.campo,
+						campo: catalogo.campo,
+						grupo: catalogo.grupo,
+						label: catalogo.label,
+						visual: items[i].visual ? "S" : "N"
+					});
+				}
+			}
+
+			function removeColunasAplicativo(sel) {
+				w2ui.w2uiGridColunas.remove.apply(w2ui.w2uiGridColunas, sel);
+			}
+
+			$("#w2uiGridColunas").w2grid({
+				name: "w2uiGridColunas",
+				show: { header: false, toolbar: true, footer: false, toolbarReload: false, toolbarColumns: false, toolbarSearch: false },
+				multiSearch: false,
+				reorderColumns: false,
+				columns: [
+					{ field: "grupo", caption: "Grupo", size: "25%", sortable: true, style: style },
+					{ field: "label", caption: "Coluna", size: "50%", sortable: true, style: style },
+					{ field: "campo", caption: "Campo", hidden: true },
+					{ field: "visual", caption: "Visual", size: "25%", sortable: true,
+						editable: { type: "select", items: visualColunaAplicativo },
+						render: function (record, index, col_index) {
+							var value = this.getCellValue(index, col_index);
+							var formattedValue = visualColunaAplicativo.find(function (e) { return e.id == value; });
+							return (formattedValue && formattedValue.text) || "";
+						}
+					}
+				],
+				onToolbar: function(event) {
+					var id = event.target;
+					if (id == "btnAddColuna") {
+						addColunasAplicativo();
+					} else if (id == "btnDeleteColuna") {
+						removeColunasAplicativo(w2ui.w2uiGridColunas.getSelection());
+					} else if (id == "btnReplicarColuna") {
+						replicarColunasAplicativo();
+					}
+				},
+				onChange: function(event) {
+					event.onComplete = function() {
+						this.mergeChanges();
+						this.refreshCell(event.recid, event.field);
+					}
+				}
+			});
+			w2ui.w2uiGridColunas.toolbar.add([
+				{ type: "html", id: "label", html: "<div style=\'font-weight: bold; font-size: 1.1em;\'>Colunas do aplicativo: </div>" },
+				{ type: "button", id: "btnAddColuna", caption: "Adicionar", icon: "fa fa-plus" },
+				{ type: "button", id: "btnDeleteColuna", caption: "Remover", icon: "fa fa-times" },
+				{ type: "button", id: "btnReplicarColuna", caption: "Replicar para demais atividades", icon: "fa fa-copy" }
+			]);
+
+			$().w2grid({
+				name: "w2uiGridAddColunas",
+				show: { header: false, toolbar: true, footer: false, toolbarReload: false, toolbarColumns: false, toolbarSearch: true, selectColumn: true },
+				multiSearch: false,
+				reorderColumns: false,
+				columns: [
+					{ field: "grupo", caption: "Grupo", size: "30%", sortable: true, searchable: true },
+					{ field: "label", caption: "Coluna", size: "70%", sortable: true, searchable: true }
+				]
+			});
+
+			function addColunasAplicativo() {
+				var selecionadas = {};
+				var records = w2ui.w2uiGridColunas.records;
+				for (var i = 0; i < records.length; i++) {
+					selecionadas[records[i].campo] = true;
+				}
+				var disponiveis = [];
+				for (var j = 0; j < COLUNAS_APLICATIVO.length; j++) {
+					var coluna = COLUNAS_APLICATIVO[j];
+					if (!selecionadas[coluna.campo]) {
+						disponiveis.push({ recid: coluna.campo, campo: coluna.campo, grupo: coluna.grupo, label: coluna.label });
+					}
+				}
+				w2ui.w2uiGridAddColunas.clear();
+				w2ui.w2uiGridAddColunas.add(disponiveis);
+
+				w2popup.open({
+					title   : "Colunas do aplicativo",
+					width   : 600,
+					height  : 500,
+					showMax : true,
+					body    : \'<div id="layout-popup-colunas" style="position: absolute; left: 5px; top: 5px; right: 5px; bottom: 5px;"></div>\',
+					buttons : \'<button class="btn" id="btnOkColunas">Ok</button>\' +
+							  \'<button class="btn" id="btnCancelarColunas" onclick="w2popup.close();">Cancelar</button>\',
+					onOpen  : function (event) {
+						event.onComplete = function () {
+							$("#btnOkColunas").click(function() {
+								var sel = w2ui.w2uiGridAddColunas.getSelection();
+								for (var k = 0; k < sel.length; k++) {
+									var rec1 = w2ui.w2uiGridAddColunas.get(sel[k]);
+									if (rec1 && w2ui.w2uiGridColunas.get(rec1.recid) == null) {
+										w2ui.w2uiGridColunas.add({
+											recid: rec1.campo,
+											campo: rec1.campo,
+											grupo: rec1.grupo,
+											label: rec1.label,
+											visual: "S"
+										});
+									}
+								}
+								w2ui.w2uiGridAddColunas.clear();
+								w2popup.close();
+							});
+							$("#w2ui-popup #layout-popup-colunas").w2render("w2uiGridAddColunas");
+						};
+					},
+					onClose: function() {
+						w2ui.w2uiGridAddColunas.clear();
+					}
+				});
+			}
+
+			function replicarColunasAplicativo() {
+				if ($("#_id").val() == "") {
+					w2alert("Salve a atividade antes de replicar as colunas.");
+					return;
+				}
+				if (!confirm("As demais atividades deste processo passarão a usar estas colunas. A configuração atual delas será substituída. Salve esta atividade para gravar a mesma configuração nela.")) {
+					return;
+				}
+				$.ajax({
+					type: "POST",
+					dataType: "json",
+					url: "odwctrl?action=execTarefa&ajax=true&idTarefa=" + odwW2UIGridOptions.idTarefaCRUD + "&_action=replicar-colunas",
+					data: "idwfprocesso=" + encodeURIComponent($("#idwfprocesso").val())
+						+ "&_id=" + encodeURIComponent($("#_id").val())
+						+ "&CamposUsoAplicacao=" + encodeURIComponent(JSON.stringify(getCamposUsoAplicacaoPayload())),
+					contentType: "application/x-www-form-urlencoded; " + odwW2UIGridOptions.ajaxCharset,
+					success: function(response) {
+						showResponse(response);
+						w2ui.w2uiGrid.reload();
+					}
+				});
+			}
+
+</script_content>
+
+	<script type="text/javascript">
+		$(document).ready(function() {
 			$("#idwfatividade").setMask();
 			$("#descricao").focus(function(){
 				  $(this).val("");
@@ -286,6 +542,11 @@ $> msgBuilder.setReplaceVarsOnTemplate(true);
 						<td class="input-label">Ignorar Empresa Colaborador</td>	
 						<td>
 					       $> msgBuilder.parameter('ignoraempresawfatividadecolaborador type="text" class="odw_parameter_input" custom="odw=\'input\' odw_default_value=\'$c{ignoraempresawfatividadecolaborador#}\'" values="sql_var(sql_ignoraempresawfatividadecolaborador)"');
+						</td>
+					</tr>
+					<tr>
+						<td colspan="5" align="center" style="padding-top: 5px;">
+							<div id="w2uiGridColunas" style="width: 100%; height: 220px;"></div>
 						</td>
 					</tr>
 					<tr>
